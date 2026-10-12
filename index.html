@@ -1,0 +1,1038 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Piggy">
+<title>Piggy's Banana Maze</title>
+<style>
+  :root {
+    --bg: #fdf3e1;
+    --floor: #fffaf0;
+    --wall: #6cbf5a;
+    --wall-top: #86d473;
+    --text: #5a3b2e;
+    --ink: #5a3b2e;   /* text on white cards, same in every theme */
+    --fog: 43, 29, 58;
+    --accent: #ff8fb1;
+    --accent-dark: #c4577b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    transition: background 0.6s, color 0.6s;
+    font-family: "Comic Sans MS", "Chalkboard SE", "Comic Neue", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;   /* no long-press menus on iPad */
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;    /* no double-tap zoom */
+    overscroll-behavior: none;
+  }
+  #board { touch-action: none; }   /* swiping on the maze moves piggy, not the page */
+  header {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 10px 16px;
+  }
+  h1 { margin: 0; font-size: clamp(22px, 4vw, 34px); }
+  .stat, .card { color: var(--ink); }
+  .hats { display: flex; align-items: center; gap: 4px; padding: 4px 10px; }
+  .hats button { font-size: 22px; padding: 2px 6px; background: none; box-shadow: none; border-radius: 10px; }
+  .hats button.chosen { background: var(--accent); }
+  .stat {
+    font-size: clamp(18px, 3vw, 24px);
+    background: #fff;
+    border-radius: 999px;
+    padding: 4px 16px;
+    box-shadow: 0 2px 0 #0001;
+  }
+  button {
+    font: inherit;
+    font-size: 20px;
+    border: none;
+    border-radius: 14px;
+    padding: 6px 14px;
+    background: var(--accent);
+    color: #fff;
+    cursor: pointer;
+    box-shadow: 0 3px 0 var(--accent-dark);
+    touch-action: manipulation;
+  }
+  button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--accent-dark); }
+  #board {
+    border-radius: 16px;
+    box-shadow: 0 6px 20px #0002;
+    background: var(--floor);
+    max-width: calc(100vw - 32px);
+  }
+  #pad {
+    display: grid;
+    grid-template-columns: repeat(3, 60px);
+    grid-template-rows: repeat(2, 60px);
+    gap: 6px;
+    padding: 12px;
+  }
+  #pad button { font-size: 28px; padding: 0; }
+  #pad .up { grid-column: 2; }
+  #pad .left { grid-column: 1; grid-row: 2; }
+  #pad .down { grid-column: 2; grid-row: 2; }
+  #pad .right { grid-column: 3; grid-row: 2; }
+  .overlay {
+    position: fixed;
+    inset: 0;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    background: #0004;
+    padding: 16px;
+  }
+  .overlay.show { display: flex; }
+  .clue { font-size: 90px; line-height: 1.1; }
+  .blanks { font-size: 36px; letter-spacing: 6px; margin: 6px 0 14px; font-family: monospace; }
+  .blanks .hint { color: #c9b8a8; }
+  #answer {
+    font: inherit;
+    font-size: 30px;
+    width: 8em;
+    text-align: center;
+    border: 3px solid var(--accent);
+    border-radius: 14px;
+    padding: 6px;
+    text-transform: lowercase;
+  }
+  .letters { margin: 10px auto 14px; display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; max-width: 470px; }
+  .clue.math { font-size: 56px; font-weight: bold; }
+  .counters { font-size: 26px; margin-top: 4px; }
+  .counters .gone { opacity: 0.25; }
+  .letters button {
+    font-size: 24px; width: 48px; height: 48px; padding: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #ffc35a; box-shadow: 0 3px 0 #c98c1f;
+  }
+  .card .secondary { background: #b9a89a; box-shadow: 0 3px 0 #8a7a6d; font-size: 20px; }
+  #feedback { min-height: 1.3em; margin: 12px 0 0; }
+  .shake { animation: shake 0.4s; }
+  .poof { animation: poof 0.5s; }
+  @keyframes poof {
+    0% { transform: scale(0.3); opacity: 0; }
+    60% { transform: scale(1.3); opacity: 1; }
+    100% { transform: scale(1); }
+  }
+  @keyframes shake {
+    20%, 60% { transform: translateX(-10px); }
+    40%, 80% { transform: translateX(10px); }
+  }
+  .card {
+    max-height: calc(100vh - 32px);
+    overflow-y: auto;
+    background: #fff;
+    border-radius: 24px;
+    padding: 24px 32px;
+    text-align: center;
+    font-size: 26px;
+    box-shadow: 0 10px 40px #0003;
+  }
+  .card .big { font-size: 72px; }
+  /* Touch screens (iPad): bigger arrow buttons, a more compact password window,
+     and the on-screen keys replace the iPad keyboard */
+  @media (pointer: coarse) {
+    #pad { grid-template-columns: repeat(3, 80px); grid-template-rows: repeat(2, 80px); }
+    #pad button { font-size: 36px; }
+    .card { padding: 16px 20px; }
+    .card .big { font-size: 52px; }
+    .clue { font-size: 64px; }
+    .clue.math { font-size: 48px; }
+    #answer { position: absolute; opacity: 0; width: 1px; height: 1px; pointer-events: none; }
+  }
+  .wiggle { display: inline-block; animation: wiggle 0.6s ease-in-out infinite; }
+  @keyframes wiggle {
+    0%, 100% { transform: rotate(-12deg); }
+    50% { transform: rotate(12deg); }
+  }
+  .card p { margin: 8px 0 18px; }
+  .card button { font-size: 26px; padding: 10px 24px; }
+</style>
+</head>
+<body>
+  <header>
+    <h1>🐷 Piggy's Banana Maze</h1>
+    <span class="stat" id="level">Level 1</span>
+    <span class="stat" id="count">🍌 0 / 0</span>
+    <button id="restart" title="New maze">🔄</button>
+    <button id="mute" title="Sound on/off">🔊</button>
+    <span class="stat hats" id="hats" title="Choose a hat for piggy">Hatt:</span>
+  </header>
+
+  <canvas id="board"></canvas>
+
+  <div id="pad">
+    <button class="up" data-dir="0,-1">⬆️</button>
+    <button class="left" data-dir="-1,0">⬅️</button>
+    <button class="down" data-dir="0,1">⬇️</button>
+    <button class="right" data-dir="1,0">➡️</button>
+  </div>
+
+  <div id="overlay" class="overlay">
+    <div class="card">
+      <div class="big">🐷🍌🎉</div>
+      <p id="winText">Yum! Piggy found all the bananas!</p>
+      <button id="next">Next level ▶</button>
+    </div>
+  </div>
+
+  <div id="guard" class="overlay">
+    <div class="card" id="guardCard">
+      <div class="big wiggle" id="guardFace">🐮</div>
+      <p id="askText"></p>
+      <div id="puzzle">
+      <div class="clue" id="clue">🐱</div>
+      <div class="blanks" id="blanks"></div>
+      <form id="guardForm">
+        <input id="answer" autocomplete="off" autocapitalize="off" autocorrect="off" spellcheck="false">
+        <div class="letters" id="keys"></div>
+        <button type="submit">OK ✔️</button>
+        <button type="button" class="secondary" id="giveUp">Gå tillbaka</button>
+      </form>
+      <p id="feedback"></p>
+      </div>
+      <div id="reveal" hidden>
+        <div class="clue poof" id="revealBanana">🍌</div>
+        <button id="revealOk">OK 😅</button>
+      </div>
+      <div id="thanks" hidden>
+        <div class="clue poof">🏆</div>
+        <button id="thanksOk">OK 😊</button>
+      </div>
+    </div>
+  </div>
+
+<script>
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+
+// ---- Game state ----
+let level = 1;
+let grid, cols, rows, tile;
+let pig, drawPos, bananas, total, steps;
+let won = false;
+let fog = 1;
+let levelStart = 0;
+const PREVIEW_MS = 3000; // the whole maze is lit up this long at the start of each level
+const SIGHT = 3; // how many tiles piggy can see around itself
+const particles = [];
+
+// ---- Guardians and their passwords (easy Swedish words with a picture clue) ----
+const GUARDIANS = ['🐮'];
+const WORDS = [
+  ['ko', '🐮'], ['bi', '🐝'], ['sol', '☀️'], ['bil', '🚗'], ['hus', '🏠'], ['mus', '🐭'],
+  ['båt', '⛵'], ['tåg', '🚂'], ['bok', '📖'], ['ost', '🧀'], ['orm', '🐍'], ['sko', '👟'],
+  ['snö', '❄️'], ['katt', '🐱'], ['hund', '🐶'], ['fisk', '🐟'], ['boll', '⚽'], ['gris', '🐷'],
+  ['hatt', '🎩'], ['häst', '🐴'], ['måne', '🌙'], ['glass', '🍦'], ['äpple', '🍎'], ['träd', '🌳'],
+  ['tårta', '🎂'], ['blomma', '🌸'], ['fågel', '🐦'], ['uggla', '🦉'], ['nyckel', '🔑'],
+  ['stjärna', '⭐'], ['banan', '🍌'], ['regn', '🌧️'], ['säng', '🛏️'], ['mjölk', '🥛'],
+];
+// ---- Math problems for the treasure chests. They get a bit harder each level. ----
+function mathProblem() {
+  const r = n => Math.floor(Math.random() * (n + 1));  // random whole number 0..n
+  if (level >= 5 && Math.random() < 0.3) {
+    const a = pick([2, 5, 10]), b = 1 + r(4);
+    return { text: `${a} × ${b}`, answer: a * b };
+  }
+  const max = level <= 2 ? 10 : 20;
+  if (level >= 2 && Math.random() < 0.5) {
+    const a = 2 + r(max - 2), b = 1 + r(a - 1);
+    return { text: `${a} − ${b}`, answer: a - b, a, b, minus: true };
+  }
+  const a = 1 + r(max - 2), b = 1 + r(max - a - 1);
+  return { text: `${a} + ${b}`, answer: a + b, a, b };
+}
+
+// Little apples to count on, for small numbers
+function counters(p) {
+  if (p.a === undefined || p.a > 10 || (!p.minus && p.a + p.b > 10)) return '';
+  if (p.minus) {
+    return '🍎'.repeat(p.a - p.b) + `<span class="gone">${'🍎'.repeat(p.b)}</span>`;
+  }
+  return '🍎'.repeat(p.a) + ' + ' + '🍎'.repeat(p.b);
+}
+
+let revealing = false;  // showing "it was a decoy!" after a lock was opened
+let asking = null;   // the guarded banana piggy is trying to get
+let askDir = null;   // which way piggy was walking when the guardian stopped it
+let wrongTries = 0;
+const pick = list => list[Math.floor(Math.random() * list.length)];
+
+// Grid cell values
+const OPEN = 0, HEDGE = 1, INVISIBLE = 2;
+
+// Invisible walls piggy bumped into show up for a while, then fade away again (but stay there)
+const WALL_SHOWN_MS = 5000, WALL_FADE_MS = 1000;
+let bumpedWalls = new Map();  // "x,y" -> when piggy bumped into it
+function wallVisibility(x, y, now) {
+  if (won) return 1;
+  const since = now - (bumpedWalls.get(x + ',' + y) ?? -Infinity);
+  if (since < WALL_SHOWN_MS) return 1;
+  return Math.max(0, 1 - (since - WALL_SHOWN_MS) / WALL_FADE_MS);
+}
+
+// ---- Maze generation (random depth-first search) ----
+// The grid is (2w+1) x (2h+1): odd coordinates are rooms, the rest are hedges.
+function makeMaze(w, h) {
+  cols = 2 * w + 1;
+  rows = 2 * h + 1;
+  const g = Array.from({ length: rows }, () => Array(cols).fill(1));
+  const seen = new Set(['0,0']);
+  const stack = [[0, 0]];
+  g[1][1] = 0;
+  while (stack.length) {
+    const [cx, cy] = stack[stack.length - 1];
+    const options = [[1, 0], [-1, 0], [0, 1], [0, -1]]
+      .map(([dx, dy]) => [cx + dx, cy + dy, dx, dy])
+      .filter(([nx, ny]) => nx >= 0 && ny >= 0 && nx < w && ny < h && !seen.has(nx + ',' + ny));
+    if (!options.length) { stack.pop(); continue; }
+    const [nx, ny, dx, dy] = options[Math.floor(Math.random() * options.length)];
+    g[2 * cy + 1 + dy][2 * cx + 1 + dx] = 0;
+    g[2 * ny + 1][2 * nx + 1] = 0;
+    seen.add(nx + ',' + ny);
+    stack.push([nx, ny]);
+  }
+  // Knock out a few extra hedges so there are shortcuts (less frustrating for little players)
+  const extra = Math.floor(w * h * 0.1);
+  for (let i = 0; i < extra; i++) {
+    const x = 1 + Math.floor(Math.random() * (cols - 2));
+    const y = 1 + Math.floor(Math.random() * (rows - 2));
+    const isHedgeBetweenRooms = (x % 2 === 0 && y % 2 === 1) || (x % 2 === 1 && y % 2 === 0);
+    if (isHedgeBetweenRooms) g[y][x] = 0;
+  }
+  return g;
+}
+
+// Can piggy still reach every banana from the start?
+function allBananasReachable() {
+  const seen = new Set(['1,1']);
+  const queue = [[1, 1]];
+  while (queue.length) {
+    const [x, y] = queue.pop();
+    for (const [dx, dy] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) {
+      const nx = x + dx, ny = y + dy, key = nx + ',' + ny;
+      if (grid[ny][nx] === OPEN && !seen.has(key)) { seen.add(key); queue.push([nx, ny]); }
+    }
+  }
+  return bananas.every(b => seen.has(b.x + ',' + b.y));
+}
+
+// Turn some passages into invisible walls, but never block the way to a banana.
+function hideWalls(count) {
+  const passages = [];
+  for (let y = 1; y < rows - 1; y++) {
+    for (let x = 1; x < cols - 1; x++) {
+      if (grid[y][x] === OPEN && (x % 2 === 0) !== (y % 2 === 0)) passages.push([x, y]);
+    }
+  }
+  passages.sort(() => Math.random() - 0.5);
+  let placed = 0;
+  for (const [x, y] of passages) {
+    if (placed === count) break;
+    grid[y][x] = INVISIBLE;
+    if (allBananasReachable()) placed++;
+    else grid[y][x] = OPEN;
+  }
+}
+
+// ---- Colour themes: each level gets the next one ----
+const THEMES = [
+  { name: '🌷 Trädgård', bg: '#fdf3e1', floor: '#fffaf0', wall: '#6cbf5a', wallTop: '#86d473', text: '#5a3b2e' },
+  { name: '🏖️ Strand',   bg: '#e4f5fb', floor: '#fff3d1', wall: '#3f9cc4', wallTop: '#68bfe0', text: '#1f4a5c' },
+  { name: '🍂 Höst',     bg: '#fbeedd', floor: '#fff6ea', wall: '#cf7426', wallTop: '#eb9a45', text: '#6b3410' },
+  { name: '❄️ Vinter',   bg: '#e8f1fb', floor: '#ffffff', wall: '#8fbde3', wallTop: '#bcdcf5', text: '#2b4865' },
+  { name: '🍭 Godis',    bg: '#fde6f2', floor: '#fff7fb', wall: '#e2609f', wallTop: '#f497c6', text: '#7a1f4d' },
+  { name: '🌴 Djungel',  bg: '#e1f0d3', floor: '#f3f9e6', wall: '#2e7a47', wallTop: '#43995e', text: '#1f4a2b' },
+  { name: '🚀 Rymden',   bg: '#1d1b3d', floor: '#2f2c5e', wall: '#7b5bd6', wallTop: '#9c84ea', text: '#f1ecff' },
+  // Rainbow: the walls get their colours from their position (see the hedge drawing code)
+  { name: '🌈 Regnbåge', bg: '#f6efff', floor: '#ffffff', wall: '#e05555', wallTop: '#f08080', text: '#5b2d82', rainbow: true },
+];
+let theme = THEMES[0];
+
+// Darkness colours, picked at random each level (never the same twice in a row)
+const DARKNESS = [
+  '60, 25, 95',   // purple night
+  '10, 45, 110',  // deep sea blue
+  '85, 40, 12',   // chocolate brown
+  '105, 15, 45',  // dark berry red
+  '10, 65, 30',   // forest green
+  '5, 70, 80',    // deep teal
+  '12, 10, 22',   // pitch black
+  '30, 20, 80',   // ink blue
+];
+let darkness = DARKNESS[0];
+
+// Random order: every theme shows up once before any repeats, and never twice in a row.
+const themeOrder = [];
+function themeForLevel(n) {
+  while (themeOrder.length < n) {
+    const round = [...THEMES].sort(() => Math.random() - 0.5);
+    if (round[0] === themeOrder[themeOrder.length - 1]) round.push(round.shift());
+    themeOrder.push(...round);
+  }
+  return themeOrder[n - 1];
+}
+
+function applyTheme() {
+  setTheme(themeForLevel(level));
+  darkness = pick(DARKNESS.filter(d => d !== darkness));
+  document.documentElement.style.setProperty('--fog', darkness);
+}
+
+function setTheme(t) {
+  theme = t;
+  const root = document.documentElement.style;
+  root.setProperty('--bg', theme.bg);
+  root.setProperty('--floor', theme.floor);
+  root.setProperty('--wall', theme.wall);
+  root.setProperty('--wall-top', theme.wallTop);
+  root.setProperty('--text', theme.text);
+}
+
+function newLevel() {
+  applyTheme();
+  const w = Math.min(4 + level * 2, 16);
+  const h = Math.min(3 + level, 11);
+  grid = makeMaze(w, h);
+  bumpedWalls = new Map();
+  pig = { x: 1, y: 1, face: 1 };
+  drawPos = { x: 1, y: 1 };
+  steps = 0;
+  won = false;
+  fog = 0;
+  levelStart = performance.now();
+
+  // Scatter bananas in random rooms (not where piggy starts).
+  // The first `total` are real; the rest are decoys that look the same but don't count.
+  total = Math.min(2 + level, 10);
+  const decoys = Math.min(level, 4);
+  bananas = [];
+  while (bananas.length < total + decoys) {
+    const x = 2 * Math.floor(Math.random() * w) + 1;
+    const y = 2 * Math.floor(Math.random() * h) + 1;
+    const taken = (x === 1 && y === 1) || bananas.some(b => b.x === x && b.y === y);
+    if (!taken) bananas.push({ x, y, wobble: Math.random() * Math.PI * 2, decoy: bananas.length >= total });
+  }
+
+  hideWalls(Math.min(level + 1, 6));
+
+  // Lock up about half of the real bananas, and some decoys too (so a lock doesn't
+  // give away that a banana is real). Cows want a Swedish password, treasure chests
+  // want a math answer. Short words on early levels, longer later.
+  const words = WORDS.filter(([word]) => word.length <= level + 3).sort(() => Math.random() - 0.5);
+  let cowNext = Math.random() < 0.5;
+  const lock = banana => {
+    if (cowNext && words.length) {
+      const [word, picture] = words.pop();
+      banana.guard = {
+        kind: 'cow', face: pick(GUARDIANS), answer: word, clue: picture,
+        ask: 'Lösenord, tack! 🔒<br>Vad heter det här?', keys: ['å', 'ä', 'ö'],
+      };
+    } else {
+      const p = mathProblem();
+      banana.guard = {
+        kind: 'chest', face: '🔐', answer: String(p.answer),
+        clue: `${p.text} = ?<div class="counters">${counters(p)}</div>`,
+        ask: 'Kistan är låst! 🗝️<br>Räkna ut talet:', keys: [...'1234567890'],
+      };
+    }
+    cowNext = !cowNext;
+  };
+  bananas.slice(0, Math.ceil(total / 2)).forEach(lock);
+  bananas.filter(b => b.decoy && Math.random() < 0.5).forEach(lock);
+  document.getElementById('overlay').classList.remove('show');
+  updateHud();
+  resize();
+}
+
+function updateHud() {
+  document.getElementById('level').textContent = `Level ${level} · ${theme.name}`;
+  document.getElementById('count').textContent = `🍌 ${total - realLeft()} / ${total}`;
+}
+
+const realLeft = () => bananas.filter(b => !b.decoy).length;
+
+// ---- Moving the pig ----
+function move(dx, dy, quiet) {
+  if (won || asking || performance.now() - levelStart < PREVIEW_MS) return;
+  const nx = pig.x + dx, ny = pig.y + dy;
+  if (grid[ny][nx] === INVISIBLE && wallVisibility(nx, ny, performance.now()) < 1) {
+    // Bonk! An invisible wall shows itself for a little while.
+    bumpedWalls.set(nx + ',' + ny, performance.now());
+    sound('boing');
+    burst(nx, ny, ['💥', '✨'], 6);
+    return;
+  }
+  if (grid[ny][nx] !== OPEN) { if (!quiet) sound('bump'); return; }
+  if (dx) pig.face = dx;
+  const i = bananas.findIndex(b => b.x === nx && b.y === ny);
+  if (i >= 0 && bananas[i].guard) { askPassword(bananas[i], dx, dy); return; }
+  pig.x = nx; pig.y = ny;
+  steps++;
+  if (i >= 0 && bananas[i].decoy) {
+    // Tricked! It was a fake banana.
+    bananas.splice(i, 1);
+    sound('fake');
+    burst(nx, ny, ['💨', '❓', '🙃'], 8);
+  } else if (i >= 0) {
+    bananas.splice(i, 1);
+    sound('eat');
+    burst(nx, ny, ['✨', '⭐', '💛'], 10);
+    updateHud();
+    if (!realLeft()) win();
+  }
+}
+
+// ---- Guardian password dialog ----
+const answerInput = document.getElementById('answer');
+const TOUCH = matchMedia('(pointer: coarse)').matches;  // iPad / tablet / phone
+const ALPHABET = [...'abcdefghijklmnopqrstuvwxyzåäö'];
+
+// On touch screens we use our own big letter buttons instead of the iPad keyboard
+function focusAnswer() {
+  if (!TOUCH) answerInput.focus();
+}
+
+function askPassword(banana, dx, dy) {
+  asking = banana;
+  askDir = [dx, dy];
+  wrongTries = 0;
+  held.clear();
+  document.getElementById('puzzle').hidden = false;
+  document.getElementById('reveal').hidden = true;
+  const g = banana.guard;
+  const face = document.getElementById('guardFace');
+  face.textContent = g.face;
+  face.classList.toggle('wiggle', g.kind === 'cow');
+  document.getElementById('askText').innerHTML = g.ask;
+  const clue = document.getElementById('clue');
+  clue.innerHTML = g.clue;
+  clue.classList.toggle('math', g.kind === 'chest');
+  const keys = document.getElementById('keys');
+  keys.innerHTML = '';
+  const keyList = g.kind === 'cow' && TOUCH ? ALPHABET : g.keys;
+  for (const k of [...keyList, '⌫']) {
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.textContent = k;
+    btn.onclick = () => {
+      if (k === '⌫') answerInput.value = answerInput.value.slice(0, -1);
+      else if (answerInput.value.length < answerInput.maxLength) answerInput.value += k;
+      renderBlanks();
+      focusAnswer();
+    };
+    keys.appendChild(btn);
+  }
+  document.getElementById('feedback').textContent = '';
+  answerInput.value = '';
+  answerInput.inputMode = TOUCH ? 'none' : g.kind === 'chest' ? 'numeric' : 'text';
+  answerInput.maxLength = g.answer.length;
+  renderBlanks();
+  sound('hello');
+  document.getElementById('guard').classList.add('show');
+  focusAnswer();
+}
+
+// Shows one box per letter. After every 2 wrong tries, one more letter is shown as a hint.
+function renderBlanks() {
+  if (asking.guard.kind === 'chest') answerInput.value = answerInput.value.replace(/\D/g, '');
+  const word = asking.guard.answer;
+  const typed = answerInput.value.toLowerCase();
+  const hints = Math.floor(wrongTries / 2);
+  document.getElementById('blanks').innerHTML = [...word].map((letter, i) => {
+    if (i < typed.length) return typed[i].toUpperCase();
+    if (i < hints) return `<span class="hint">${letter.toUpperCase()}</span>`;
+    return '_';
+  }).join(' ');
+}
+
+// The lock opened, but the banana inside was a decoy: make that really clear.
+function revealDecoy() {
+  revealing = true;
+  const face = document.getElementById('guardFace');
+  face.textContent = '🙃';
+  face.classList.remove('wiggle');
+  document.getElementById('askText').innerHTML = 'Rätt svar! ⭐<br>Men bananen var en <b>bluff</b>!';
+  document.getElementById('puzzle').hidden = true;
+  document.getElementById('reveal').hidden = false;
+  const banana = document.getElementById('revealBanana');
+  banana.textContent = '🍌';
+  setTimeout(() => {
+    if (!revealing) return;
+    banana.textContent = '💨';
+    banana.classList.remove('poof');
+    void banana.offsetWidth;  // restart the poof animation
+    banana.classList.add('poof');
+    sound('fake');
+  }, 800);
+  document.getElementById('revealOk').focus();
+}
+
+function finishReveal() {
+  if (!revealing) return;
+  const b = asking;
+  const [dx, dy] = askDir;
+  bananas.splice(bananas.indexOf(b), 1);
+  burst(b.x, b.y, ['💨', '🙃'], 6);
+  closeGuard();
+  move(dx, dy);  // the spot is empty now, piggy walks in
+}
+document.getElementById('revealOk').onclick = finishReveal;
+
+// Easter egg: the game's helpers get thanked when their name fits a cow's password
+// (Tove also turns the maze into the rainbow theme)
+const HELPERS = { niko: 4, tove: 4, jakob: 5 };
+let thanking = false;
+
+function thankHelper(name) {
+  thanking = true;
+  if (name === 'tove') {
+    setTheme(THEMES.find(t => t.rainbow));
+    updateHud();
+  }
+  const face = document.getElementById('guardFace');
+  face.textContent = '🥳';
+  face.classList.remove('wiggle');
+  const Name = name[0].toUpperCase() + name.slice(1);
+  document.getElementById('askText').innerHTML =
+    `Hemligt lösenord! 🤫<br>Tack <b>${Name}</b> för att du hjälpte till att göra spelet! 💖`;
+  document.getElementById('puzzle').hidden = true;
+  const thanks = document.getElementById('thanks');
+  thanks.hidden = false;
+  const trophy = thanks.querySelector('.clue');
+  trophy.classList.remove('poof');
+  void trophy.offsetWidth;  // restart the poof animation
+  trophy.classList.add('poof');
+  sound('win');
+  answerInput.blur();
+  document.getElementById('thanksOk').focus();
+}
+
+// Back to the cow's question with an empty answer, so the real word can be typed
+function finishThanks() {
+  thanking = false;
+  const g = asking.guard;
+  const face = document.getElementById('guardFace');
+  face.textContent = g.face;
+  face.classList.add('wiggle');
+  document.getElementById('askText').innerHTML = g.ask;
+  document.getElementById('thanks').hidden = true;
+  document.getElementById('puzzle').hidden = false;
+  document.getElementById('feedback').textContent = '';
+  answerInput.value = '';
+  renderBlanks();
+  focusAnswer();
+}
+document.getElementById('thanksOk').onclick = finishThanks;
+
+function closeGuard() {
+  if (thanking) { thanking = false; document.getElementById('thanks').hidden = true; }
+  revealing = false;
+  asking = null;
+  answerInput.blur();
+  document.getElementById('guard').classList.remove('show');
+}
+
+document.getElementById('guardForm').onsubmit = e => {
+  e.preventDefault();
+  const guess = answerInput.value.trim().toLowerCase();
+  if (!guess) return;
+  if (asking.guard.kind === 'cow' && HELPERS[guess] === asking.guard.answer.length
+      && guess !== asking.guard.answer) {
+    thankHelper(guess);
+    return;
+  }
+  if (guess === asking.guard.answer) {
+    const party = asking.guard.kind === 'cow' ? asking.guard.face : '🔓';
+    burst(asking.x, asking.y, ['💖', '⭐', party], 12);
+    delete asking.guard;
+    sound('yes');
+    if (asking.decoy) { revealDecoy(); return; }
+    const [dx, dy] = askDir;
+    closeGuard();
+    move(dx, dy);  // walk onto the banana and eat it
+  } else {
+    wrongTries++;
+    const card = document.getElementById('guardCard');
+    card.classList.remove('shake');
+    void card.offsetWidth;  // restart the shake animation
+    card.classList.add('shake');
+    document.getElementById('feedback').textContent =
+      wrongTries % 2 === 0 ? 'Nej! Här kommer en ledtråd 💡' : 'Nej, försök igen! 🙂';
+    sound('no');
+    answerInput.value = '';
+    renderBlanks();
+    focusAnswer();
+  }
+};
+answerInput.addEventListener('input', renderBlanks);
+document.getElementById('giveUp').onclick = closeGuard;
+
+function win() {
+  won = true;
+  sound('win');
+  // Any decoys still lying around go poof
+  for (const b of bananas) burst(b.x, b.y, ['💨'], 4);
+  bananas = [];
+  for (let i = 0; i < 40; i++) {
+    burst(Math.random() * cols, Math.random() * rows, ['🎉', '🍌', '⭐', '💖'], 1);
+  }
+  document.getElementById('winText').textContent =
+    `Yum! Piggy found all ${total} bananas in ${steps} steps!`;
+  setTimeout(() => document.getElementById('overlay').classList.add('show'), 900);
+}
+
+function nextLevel() {
+  level++;
+  newLevel();
+}
+
+// ---- Controls: arrow keys / WASD, hold to keep walking ----
+const KEYS = {
+  ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+  w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+};
+const held = new Map();
+let lastMove = 0;
+const STEP_MS = 140;
+
+function press(id, dir) {
+  if (held.has(id)) return;
+  held.set(id, dir);
+  move(dir[0], dir[1]);
+  lastMove = performance.now();
+}
+
+addEventListener('keydown', e => {
+  if (asking) {
+    if (e.key === 'Escape') thanking ? finishThanks() : revealing ? finishReveal() : closeGuard();
+    return;
+  }
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  if (won && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); nextLevel(); return; }
+  const dir = KEYS[key];
+  if (!dir) return;
+  e.preventDefault();
+  press(key, dir);
+});
+addEventListener('keyup', e => {
+  held.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key);
+});
+addEventListener('blur', () => held.clear());
+
+document.querySelectorAll('#pad button').forEach(btn => {
+  const dir = btn.dataset.dir.split(',').map(Number);
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); press('pad', dir); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
+    btn.addEventListener(ev, () => held.delete('pad')));
+});
+
+// Touch: drag a finger on the maze to walk (keep holding to keep walking),
+// or tap somewhere to take one step in that direction.
+let dragFrom = null, dragged = false;
+canvas.addEventListener('pointerdown', e => {
+  dragFrom = [e.clientX, e.clientY];
+  dragged = false;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!dragFrom) return;
+  const dx = e.clientX - dragFrom[0], dy = e.clientY - dragFrom[1];
+  if (Math.hypot(dx, dy) < 25) return;
+  const dir = Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
+  const current = held.get('drag');
+  if (!current || current[0] !== dir[0] || current[1] !== dir[1]) {
+    held.delete('drag');
+    press('drag', dir);
+    // Re-anchor just behind the finger, so turning a corner is easy
+    dragFrom = [e.clientX - dir[0] * 25, e.clientY - dir[1] * 25];
+  }
+  dragged = true;
+});
+const endDrag = e => {
+  if (dragFrom && !dragged && e.type === 'pointerup') {
+    const rect = canvas.getBoundingClientRect();
+    const dx = e.clientX - rect.left - (pig.x + 0.5) * tile;
+    const dy = e.clientY - rect.top - (pig.y + 0.5) * tile;
+    if (Math.hypot(dx, dy) > tile / 2) {
+      move(...(Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)]));
+    }
+  }
+  dragFrom = null;
+  held.delete('drag');
+};
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+document.getElementById('restart').onclick = e => { e.currentTarget.blur(); newLevel(); };
+document.getElementById('next').onclick = nextLevel;
+
+// ---- Sounds (made with Web Audio, no files needed) ----
+let audio, muted = false;
+// iPad only allows sound after the first touch, so wake the audio up then
+addEventListener('pointerdown', () => {
+  try { audio ??= new AudioContext(); audio.resume(); } catch (_) { /* no audio available */ }
+});
+function tone(freq, dur, type, delay, vol) {
+  audio ??= new AudioContext();
+  if (audio.state === 'suspended') audio.resume();
+  const t = audio.currentTime + delay;
+  const osc = audio.createOscillator();
+  const gain = audio.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  osc.connect(gain).connect(audio.destination);
+  osc.start(t);
+  osc.stop(t + dur);
+}
+function sound(name) {
+  if (muted) return;
+  try {
+    if (name === 'eat') { tone(660, 0.1, 'square', 0, 0.07); tone(990, 0.15, 'square', 0.08, 0.07); }
+    if (name === 'bump') tone(110, 0.08, 'triangle', 0, 0.2);
+    if (name === 'hello') { tone(440, 0.12, 'sine', 0, 0.2); tone(330, 0.2, 'sine', 0.12, 0.2); }
+    if (name === 'yes') [660, 880, 1320].forEach((f, i) => tone(f, 0.15, 'triangle', i * 0.08, 0.2));
+    if (name === 'boing') { tone(300, 0.08, 'sine', 0, 0.25); tone(600, 0.15, 'sine', 0.06, 0.2); }
+    if (name === 'fake') [500, 350, 200].forEach((f, i) => tone(f, 0.12, 'sawtooth', i * 0.09, 0.07));
+    if (name === 'no') { tone(220, 0.15, 'sawtooth', 0, 0.08); tone(160, 0.25, 'sawtooth', 0.15, 0.08); }
+    if (name === 'win') [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.3, 'triangle', i * 0.13, 0.2));
+  } catch (_) { /* no audio available */ }
+}
+// ---- Hats for piggy ----
+const HATS = [
+  { icon: '🚫', hat: null, name: 'Ingen hatt' },
+  { icon: '🎩', hat: '🎩', name: 'Hög hatt' },
+  { icon: '👑', hat: '👑', name: 'Krona' },
+  { icon: '🧢', hat: '🧢', name: 'Keps' },
+  { icon: '👒', hat: '👒', name: 'Solhatt' },
+  { icon: '🎓', hat: '🎓', name: 'Studentmössa' },
+  { icon: '🎀', hat: '🎀', name: 'Rosett' },
+];
+let hat = null;
+try { hat = localStorage.getItem('piggyHat') || null; } catch (_) { /* storage blocked */ }
+
+function showHats() {
+  const box = document.getElementById('hats');
+  box.querySelectorAll('button').forEach(b => b.remove());
+  for (const h of HATS) {
+    const btn = document.createElement('button');
+    btn.textContent = h.icon;
+    btn.title = h.name;
+    btn.classList.toggle('chosen', h.hat === hat);
+    btn.onclick = () => {
+      hat = h.hat;
+      try { localStorage.setItem('piggyHat', hat || ''); } catch (_) { /* storage blocked */ }
+      showHats();
+    };
+    box.appendChild(btn);
+  }
+}
+showHats();
+
+document.getElementById('mute').onclick = e => {
+  muted = !muted;
+  e.currentTarget.textContent = muted ? '🔇' : '🔊';
+  e.currentTarget.blur();
+};
+
+// ---- Sparkles & confetti ----
+function burst(x, y, chars, n) {
+  for (let i = 0; i < n; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 0.03 + Math.random() * 0.06;
+    particles.push({
+      x: x + 0.5, y: y + 0.5,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 0.04,
+      life: 1, ch: chars[Math.floor(Math.random() * chars.length)],
+    });
+  }
+}
+
+// ---- Drawing ----
+function resize() {
+  const headerH = document.querySelector('header').offsetHeight;
+  const padH = document.getElementById('pad').offsetHeight;
+  const availW = Math.min(window.innerWidth - 32, 1100);
+  const availH = window.innerHeight - headerH - padH - 16;
+  tile = Math.max(12, Math.floor(Math.min(availW / cols, availH / rows)));
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = cols * tile * dpr;
+  canvas.height = rows * tile * dpr;
+  canvas.style.width = cols * tile + 'px';
+  canvas.style.height = rows * tile + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+addEventListener('resize', resize);
+
+function emoji(ch, x, y, size, flip, angle = 0) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (flip) ctx.scale(-1, 1);
+  if (angle) ctx.rotate(angle);
+  // Safari paints emoji with the current fill (e.g. the darkness gradient), so use a plain one
+  ctx.fillStyle = '#000';
+  ctx.font = `${size}px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(ch, 0, 0);
+  ctx.restore();
+}
+
+function drawChest(cx, cy, size) {
+  const left = cx - size / 2, top = cy - size * 0.4;
+  ctx.fillStyle = '#9a5a26';                                   // box
+  ctx.beginPath(); ctx.roundRect(left, cy - size * 0.1, size, size * 0.5, size * 0.06); ctx.fill();
+  ctx.fillStyle = '#c47a38';                                   // lid
+  ctx.beginPath(); ctx.roundRect(left, top, size, size * 0.32, [size * 0.2, size * 0.2, 0, 0]); ctx.fill();
+  ctx.fillStyle = '#f2c14e';                                   // gold bands
+  ctx.fillRect(left + size * 0.12, top, size * 0.1, size * 0.8);
+  ctx.fillRect(left + size * 0.78, top, size * 0.1, size * 0.8);
+  ctx.fillRect(cx - size * 0.12, cy - size * 0.16, size * 0.24, size * 0.26);  // lock
+  ctx.fillStyle = '#3b2412';                                   // keyhole
+  ctx.beginPath(); ctx.arc(cx, cy - size * 0.06, size * 0.04, 0, Math.PI * 2); ctx.fill();
+  ctx.fillRect(cx - size * 0.02, cy - size * 0.06, size * 0.04, size * 0.1);
+}
+
+function draw(now) {
+  // Keep walking while a key / button is held
+  if (held.size && now - lastMove > STEP_MS) {
+    const dir = [...held.values()].pop();
+    move(dir[0], dir[1], true);
+    lastMove = now;
+  }
+
+  const css = getComputedStyle(document.documentElement);
+  ctx.clearRect(0, 0, cols * tile, rows * tile);
+
+  // Hedges
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const cell = grid[y][x];
+      if (cell === INVISIBLE) {
+        // Discovered invisible wall: shimmering glass
+        const shown = wallVisibility(x, y, now);
+        if (!shown) continue;
+        ctx.globalAlpha = shown;
+        ctx.fillStyle = `rgba(120, 190, 255, ${0.45 + Math.sin(now / 250 + x + y) * 0.15})`;
+        ctx.fillRect(x * tile + 1, y * tile + 1, tile - 2, tile - 2);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.8)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        ctx.moveTo(x * tile + tile * 0.25, y * tile + tile * 0.7);
+        ctx.lineTo(x * tile + tile * 0.7, y * tile + tile * 0.25);
+        ctx.stroke();
+        ctx.globalAlpha = 1;
+        continue;
+      }
+      if (cell !== HEDGE) continue;
+      if (theme.rainbow) {
+        // Colour stripes run diagonally across the maze and slowly drift
+        const hue = ((x + y) * 18 + now / 40) % 360;
+        ctx.fillStyle = `hsl(${hue}, 80%, 58%)`;
+        ctx.fillRect(x * tile, y * tile, tile, tile);
+        ctx.fillStyle = `hsl(${hue}, 85%, 72%)`;
+        ctx.fillRect(x * tile + 2, y * tile + 2, tile - 4, tile * 0.45);
+        continue;
+      }
+      ctx.fillStyle = css.getPropertyValue('--wall');
+      ctx.fillRect(x * tile, y * tile, tile, tile);
+      ctx.fillStyle = css.getPropertyValue('--wall-top');
+      ctx.fillRect(x * tile + 2, y * tile + 2, tile - 4, tile * 0.45);
+    }
+  }
+
+  // Bananas (bobbing gently)
+  for (const b of bananas) {
+    const bob = Math.sin(now / 300 + b.wobble) * tile * 0.06;
+    if (b.guard?.kind === 'chest') {
+      drawChest((b.x + 0.45) * tile, (b.y + 0.5) * tile, tile * 0.7);
+      emoji('🍌', (b.x + 0.78) * tile, (b.y + 0.25) * tile, tile * 0.4);
+    } else if (b.guard) {
+      emoji('🍌', (b.x + 0.78) * tile, (b.y + 0.78) * tile, tile * 0.4);
+      const wiggle = Math.sin(now / 150 + b.wobble) * 0.25;  // cows wiggle while they wait
+      emoji(b.guard.face, (b.x + 0.45) * tile, (b.y + 0.45) * tile + bob, tile * 0.75, false, wiggle);
+    } else {
+      emoji('🍌', (b.x + 0.5) * tile, (b.y + 0.5) * tile + bob, tile * 0.75);
+    }
+  }
+
+  // Pig glides smoothly toward its grid position
+  drawPos.x += (pig.x - drawPos.x) * 0.35;
+  drawPos.y += (pig.y - drawPos.y) * 0.35;
+
+  // Darkness: only the area around piggy is visible. The lights are on for a few seconds
+  // at the start of a level, then fade out. They come back on once the level is won.
+  const previewLeft = PREVIEW_MS - (now - levelStart);
+  if (won) fog = Math.max(0, fog - 0.02);
+  else if (previewLeft <= 0) fog = Math.min(1, fog + 0.04);
+  if (fog > 0) {
+    const cx = (drawPos.x + 0.5) * tile, cy = (drawPos.y + 0.5) * tile;
+    const light = ctx.createRadialGradient(cx, cy, tile * SIGHT * 0.5, cx, cy, tile * SIGHT);
+    const fogColor = css.getPropertyValue('--fog');
+    light.addColorStop(0, `rgba(${fogColor}, 0)`);
+    light.addColorStop(1, `rgba(${fogColor}, 1)`);
+    ctx.globalAlpha = fog;
+    ctx.fillStyle = light;
+    ctx.fillRect(0, 0, cols * tile, rows * tile);
+    ctx.globalAlpha = 1;
+  }
+  const hop = won ? Math.abs(Math.sin(now / 120)) * tile * 0.25 : 0;
+  emoji('🐷', (drawPos.x + 0.5) * tile, (drawPos.y + 0.5) * tile - hop, tile * 0.85, pig.face < 0);
+  if (hat) {
+    // Worn a little to the side (the flip mirrors the tilt when piggy faces left)
+    emoji(hat, (drawPos.x + 0.5) * tile, (drawPos.y + 0.12) * tile - hop, tile * 0.5, pig.face < 0, -0.15);
+  }
+
+  // Particles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.002; p.life -= 0.015;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+    ctx.globalAlpha = p.life;
+    emoji(p.ch, p.x * tile, p.y * tile, tile * 0.5);
+    ctx.globalAlpha = 1;
+  }
+
+  // Countdown while the lights are on: 3, 2, 1
+  if (previewLeft > 0 && !won) {
+    const size = Math.min(cols, rows) * tile * 0.5;
+    ctx.save();
+    ctx.globalAlpha = 0.85;
+    ctx.font = `bold ${size}px "Comic Sans MS", "Chalkboard SE", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = size / 12;
+    ctx.strokeStyle = '#fff';
+    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--accent');
+    const n = String(Math.ceil(previewLeft / 1000));
+    ctx.strokeText(n, cols * tile / 2, rows * tile / 2);
+    ctx.fillText(n, cols * tile / 2, rows * tile / 2);
+    ctx.restore();
+  }
+
+  requestAnimationFrame(draw);
+}
+
+newLevel();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>
