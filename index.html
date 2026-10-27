@@ -225,7 +225,7 @@ const ctx = canvas.getContext('2d');
 // ---- Game state ----
 let level = 1;
 let grid, cols, rows, tile;
-let pig, drawPos, bananas, total, steps;
+let pig, drawPos, bananas, total, steps, exit;
 let won = false;
 let fog = 1;
 let levelStart = 0;
@@ -319,7 +319,7 @@ function makeMaze(w, h) {
   return g;
 }
 
-// Can piggy still reach every banana from the start?
+// Can piggy still reach every banana and the exit from the start?
 function allBananasReachable() {
   const seen = new Set(['1,1']);
   const queue = [[1, 1]];
@@ -330,7 +330,7 @@ function allBananasReachable() {
       if (grid[ny][nx] === OPEN && !seen.has(key)) { seen.add(key); queue.push([nx, ny]); }
     }
   }
-  return bananas.every(b => seen.has(b.x + ',' + b.y));
+  return bananas.every(b => seen.has(b.x + ',' + b.y)) && seen.has(exit.x + ',' + exit.y);
 }
 
 // Turn some passages into invisible walls, but never block the way to a banana.
@@ -412,13 +412,17 @@ function newLevel() {
   grid = makeMaze(w, h);
   bumpedWalls = new Map();
   pig = { x: 1, y: 1, face: 1 };
+  // The door out is in a random room, at least halfway across the maze from piggy's start
+  do {
+    exit = { x: 2 * Math.floor(Math.random() * w) + 1, y: 2 * Math.floor(Math.random() * h) + 1 };
+  } while (exit.x + exit.y - 2 < w + h - 2);
   drawPos = { x: 1, y: 1 };
   steps = 0;
   won = false;
   fog = 0;
   levelStart = performance.now();
 
-  // Scatter bananas in random rooms (not where piggy starts).
+  // Scatter bananas in random rooms (not where piggy starts or at the exit).
   // The first `total` are real; the rest are decoys that look the same but don't count.
   total = Math.min(2 + level, 10);
   const decoys = Math.min(level, 4);
@@ -426,7 +430,7 @@ function newLevel() {
   while (bananas.length < total + decoys) {
     const x = 2 * Math.floor(Math.random() * w) + 1;
     const y = 2 * Math.floor(Math.random() * h) + 1;
-    const taken = (x === 1 && y === 1) || bananas.some(b => b.x === x && b.y === y);
+    const taken = (x === 1 && y === 1) || (x === exit.x && y === exit.y) || bananas.some(b => b.x === x && b.y === y);
     if (!taken) bananas.push({ x, y, wobble: Math.random() * Math.PI * 2, decoy: bananas.length >= total });
   }
 
@@ -463,7 +467,8 @@ function newLevel() {
 
 function updateHud() {
   document.getElementById('level').textContent = `Level ${level} · ${theme.name}`;
-  document.getElementById('count').textContent = `🍌 ${total - realLeft()} / ${total}`;
+  document.getElementById('count').textContent =
+    `🍌 ${total - realLeft()} / ${total}` + (realLeft() ? '' : ' · 🚪 Find the exit!');
 }
 
 const realLeft = () => bananas.filter(b => !b.decoy).length;
@@ -495,7 +500,14 @@ function move(dx, dy, quiet) {
     sound('eat');
     burst(nx, ny, ['✨', '⭐', '💛'], 10);
     updateHud();
+    if (!realLeft()) {
+      sound('yes');
+      burst(exit.x, exit.y, ['✨', '⭐'], 12);  // the door opens
+    }
+  }
+  if (nx === exit.x && ny === exit.y) {
     if (!realLeft()) win();
+    else { sound('bump'); burst(nx, ny, ['🔒'], 3); }  // locked until all bananas are found
   }
 }
 
@@ -694,7 +706,7 @@ function win() {
     burst(Math.random() * cols, Math.random() * rows, ['🎉', '🍌', '⭐', '💖'], 1);
   }
   document.getElementById('winText').textContent =
-    `Yum! Piggy found all ${total} bananas in ${steps} steps!`;
+    `Yum! Piggy found all ${total} bananas and got out in ${steps} steps!`;
   setTimeout(() => document.getElementById('overlay').classList.add('show'), 900);
 }
 
@@ -959,6 +971,10 @@ function draw(now) {
     }
   }
 
+  // The exit door: closed until all the real bananas are found
+  const exitOpen = !realLeft();
+  if (!exitOpen) emoji('🚪', (exit.x + 0.5) * tile, (exit.y + 0.5) * tile, tile * 0.75);
+
   // Bananas (bobbing gently)
   for (const b of bananas) {
     const bob = Math.sin(now / 300 + b.wobble) * tile * 0.06;
@@ -993,6 +1009,17 @@ function draw(now) {
     ctx.fillStyle = light;
     ctx.fillRect(0, 0, cols * tile, rows * tile);
     ctx.globalAlpha = 1;
+  }
+  if (exitOpen && !won) {
+    // The open door glows through the darkness so piggy can find the way out
+    const cx = (exit.x + 0.5) * tile, cy = (exit.y + 0.5) * tile;
+    const pulse = 0.5 + Math.sin(now / 200) * 0.15;
+    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, tile * 0.9);
+    glow.addColorStop(0, `rgba(255, 230, 120, ${pulse})`);
+    glow.addColorStop(1, 'rgba(255, 230, 120, 0)');
+    ctx.fillStyle = glow;
+    ctx.fillRect(cx - tile, cy - tile, tile * 2, tile * 2);
+    emoji('🚪', cx, cy, tile * 0.75);
   }
   const hop = won ? Math.abs(Math.sin(now / 120)) * tile * 0.25 : 0;
   emoji('🐷', (drawPos.x + 0.5) * tile, (drawPos.y + 0.5) * tile - hop, tile * 0.85, pig.face < 0);
