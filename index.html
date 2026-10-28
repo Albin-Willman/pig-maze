@@ -467,6 +467,7 @@ function newLevel() {
   };
   bananas.slice(0, Math.ceil(total / 2)).forEach(lock);
   bananas.filter(b => b.decoy && Math.random() < 0.5).forEach(lock);
+  clearTimeout(winTimer);  // a pending "you won" pop-up belongs to the old level
   document.getElementById('overlay').classList.remove('show');
   updateHud();
   resize();
@@ -703,6 +704,7 @@ document.getElementById('guardForm').onsubmit = e => {
 answerInput.addEventListener('input', renderBlanks);
 document.getElementById('giveUp').onclick = closeGuard;
 
+let winTimer;
 function win() {
   won = true;
   sound('win');
@@ -714,7 +716,7 @@ function win() {
   }
   document.getElementById('winText').textContent =
     `Yum! Piggy found all ${total} bananas and got out in ${steps} steps!`;
-  setTimeout(() => document.getElementById('overlay').classList.add('show'), 900);
+  winTimer = setTimeout(() => document.getElementById('overlay').classList.add('show'), 900);
 }
 
 function nextLevel() {
@@ -744,7 +746,8 @@ addEventListener('keydown', e => {
     return;
   }
   const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
-  if (won && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); nextLevel(); return; }
+  const winShown = document.getElementById('overlay').classList.contains('show');
+  if (winShown && (e.key === 'Enter' || e.key === ' ')) { e.preventDefault(); nextLevel(); return; }
   const dir = KEYS[key];
   if (!dir) return;
   e.preventDefault();
