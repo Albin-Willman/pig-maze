@@ -51,6 +51,7 @@
   .hats { display: flex; align-items: center; gap: 4px; padding: 4px 10px; }
   .hats button { font-size: 22px; padding: 2px 6px; background: none; box-shadow: none; border-radius: 10px; }
   .hats button.chosen { background: var(--accent); }
+  #help.off { background: #fff; box-shadow: 0 3px 0 #0002; opacity: 0.6; }
   .stat {
     font-size: clamp(18px, 3vw, 24px);
     background: #fff;
@@ -172,6 +173,7 @@
     <span class="stat" id="count">🍌 0 / 0</span>
     <button id="restart" title="New maze">🔄</button>
     <button id="mute" title="Sound on/off">🔊</button>
+    <button id="help" class="off" title="Help: the bananas light up every 30 seconds">💡</button>
     <span class="stat hats" id="hats" title="Choose a hat for piggy">Hatt:</span>
   </header>
 
@@ -231,6 +233,10 @@ let fog = 1;
 let levelStart = 0;
 const PREVIEW_MS = 3000; // the whole maze is lit up this long at the start of each level
 const SIGHT = 3; // how many tiles piggy can see around itself
+// Help mode: the bananas light up every HELP_EVERY_MS, and the light fades out over HELP_FADE_MS
+const HELP_EVERY_MS = 30000, HELP_FADE_MS = 5000;
+let helpOn = false;
+let helpFrom = 0;  // when the current round of help light-ups started
 const particles = [];
 
 // ---- Guardians and their passwords (easy Swedish words with a picture clue) ----
@@ -421,6 +427,7 @@ function newLevel() {
   won = false;
   fog = 0;
   levelStart = performance.now();
+  helpFrom = levelStart + PREVIEW_MS;  // first light-up when the lights go out
 
   // Scatter bananas in random rooms (not where piggy starts or at the exit).
   // The first `total` are real; the rest are decoys that look the same but don't count.
@@ -859,6 +866,13 @@ function showHats() {
 }
 showHats();
 
+document.getElementById('help').onclick = e => {
+  helpOn = !helpOn;
+  helpFrom = performance.now();  // light up right away when switched on
+  e.currentTarget.classList.toggle('off', !helpOn);
+  e.currentTarget.blur();
+};
+
 document.getElementById('mute').onclick = e => {
   muted = !muted;
   e.currentTarget.textContent = muted ? '🔇' : '🔊';
@@ -906,6 +920,16 @@ function emoji(ch, x, y, size, flip, angle = 0) {
   ctx.textBaseline = 'middle';
   ctx.fillText(ch, 0, 0);
   ctx.restore();
+}
+
+// A soft yellow light that shines through the darkness
+function drawGlow(x, y, strength) {
+  const cx = (x + 0.5) * tile, cy = (y + 0.5) * tile;
+  const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, tile * 0.9);
+  glow.addColorStop(0, `rgba(255, 230, 120, ${strength})`);
+  glow.addColorStop(1, 'rgba(255, 230, 120, 0)');
+  ctx.fillStyle = glow;
+  ctx.fillRect(cx - tile, cy - tile, tile * 2, tile * 2);
 }
 
 function drawChest(cx, cy, size) {
@@ -971,9 +995,10 @@ function draw(now) {
     }
   }
 
-  // The exit door: closed until all the real bananas are found
-  const exitOpen = !realLeft();
-  if (!exitOpen) emoji('🚪', (exit.x + 0.5) * tile, (exit.y + 0.5) * tile, tile * 0.75);
+  // The exit door: locked until all the real bananas are found. With help on,
+  // the open door is drawn later on top of the darkness instead, so it shines through.
+  const exitLit = helpOn && !realLeft() && !won;
+  if (!exitLit) emoji('🚪', (exit.x + 0.5) * tile, (exit.y + 0.5) * tile, tile * 0.75);
 
   // Bananas (bobbing gently)
   for (const b of bananas) {
@@ -1010,16 +1035,22 @@ function draw(now) {
     ctx.fillRect(0, 0, cols * tile, rows * tile);
     ctx.globalAlpha = 1;
   }
-  if (exitOpen && !won) {
-    // The open door glows through the darkness so piggy can find the way out
-    const cx = (exit.x + 0.5) * tile, cy = (exit.y + 0.5) * tile;
-    const pulse = 0.5 + Math.sin(now / 200) * 0.15;
-    const glow = ctx.createRadialGradient(cx, cy, 0, cx, cy, tile * 0.9);
-    glow.addColorStop(0, `rgba(255, 230, 120, ${pulse})`);
-    glow.addColorStop(1, 'rgba(255, 230, 120, 0)');
-    ctx.fillStyle = glow;
-    ctx.fillRect(cx - tile, cy - tile, tile * 2, tile * 2);
-    emoji('🚪', cx, cy, tile * 0.75);
+  if (exitLit) {
+    // Help: the open door glows through the darkness so piggy can find the way out
+    drawGlow(exit.x, exit.y, 0.5 + Math.sin(now / 200) * 0.15);
+    emoji('🚪', (exit.x + 0.5) * tile, (exit.y + 0.5) * tile, tile * 0.75);
+  }
+  if (helpOn && !won && now > helpFrom) {
+    // Help: all the bananas (fakes too) light up, then fade back into the darkness
+    const shine = 1 - ((now - helpFrom) % HELP_EVERY_MS) / HELP_FADE_MS;
+    if (shine > 0) {
+      ctx.globalAlpha = shine;
+      for (const b of bananas) {
+        drawGlow(b.x, b.y, 0.65);
+        emoji('🍌', (b.x + 0.5) * tile, (b.y + 0.5) * tile, tile * 0.75);
+      }
+      ctx.globalAlpha = 1;
+    }
   }
   const hop = won ? Math.abs(Math.sin(now / 120)) * tile * 0.25 : 0;
   emoji('🐷', (drawPos.x + 0.5) * tile, (drawPos.y + 0.5) * tile - hop, tile * 0.85, pig.face < 0);
