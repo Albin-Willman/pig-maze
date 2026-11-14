@@ -1,0 +1,873 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Grisen">
+<title>Grisens gårdsäventyr</title>
+<style>
+  :root {
+    --bg: #eef8e4;
+    --text: #3f4a26;
+    --ink: #5a3b2e;
+    --accent: #ff8fb1;
+    --accent-dark: #c4577b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    font-family: "Comic Sans MS", "Chalkboard SE", "Comic Neue", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: manipulation;
+    overscroll-behavior: none;
+  }
+  header {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center;
+    padding: 10px 16px;
+  }
+  h1 { margin: 0; font-size: clamp(22px, 4vw, 34px); }
+  .stat {
+    font-size: clamp(18px, 3vw, 24px); color: var(--ink); background: #fff;
+    border-radius: 999px; padding: 4px 16px; box-shadow: 0 2px 0 #0001;
+  }
+  .home {
+    font-size: 22px; text-decoration: none; padding: 6px 12px; border-radius: 14px;
+    background: #fff; box-shadow: 0 3px 0 #0002;
+  }
+  .home:active { transform: translateY(2px); box-shadow: 0 1px 0 #0002; }
+  button {
+    font: inherit; font-size: 20px; border: none; border-radius: 14px; padding: 6px 14px;
+    background: var(--accent); color: #fff; cursor: pointer;
+    box-shadow: 0 3px 0 var(--accent-dark); touch-action: manipulation;
+  }
+  button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--accent-dark); }
+  #board {
+    border-radius: 16px; box-shadow: 0 6px 20px #0002; touch-action: none;
+    max-width: calc(100vw - 32px);
+  }
+  #say {
+    min-height: 1.4em; margin: 8px 16px 4px; font-size: clamp(18px, 3vw, 24px);
+    text-align: center; color: var(--ink);
+  }
+  /* The bag: tap two things to put them together */
+  #bagRow { display: flex; align-items: center; gap: 8px; padding: 4px 16px; }
+  #bagRow .label { font-size: 34px; }
+  #bag { display: flex; flex-wrap: wrap; gap: 8px; justify-content: center; }
+  #bag button {
+    width: 58px; height: 58px; padding: 0; font-size: 34px;
+    display: flex; align-items: center; justify-content: center;
+    background: #fff; box-shadow: 0 3px 0 #0002; border: 3px solid transparent;
+    transition: transform 0.12s;
+  }
+  #bag button.empty { background: transparent; box-shadow: none; border: 3px dashed #0002; cursor: default; }
+  #bag button.chosen { border-color: var(--accent); transform: translateY(-6px) scale(1.08); }
+  #bag button.hint { animation: pulse 0.7s ease-in-out infinite; border-color: #ffc35a; }
+  @keyframes pulse { 50% { transform: scale(1.15); } }
+  .shake { animation: shake 0.4s; }
+  @keyframes shake {
+    20%, 60% { transform: translateX(-8px); }
+    40%, 80% { transform: translateX(8px); }
+  }
+  .poof { animation: poof 0.5s; }
+  @keyframes poof {
+    0% { transform: scale(0.3); opacity: 0; }
+    60% { transform: scale(1.3); opacity: 1; }
+    100% { transform: scale(1); }
+  }
+  #pad {
+    display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(2, 60px);
+    gap: 6px; padding: 10px;
+  }
+  #pad button { font-size: 28px; padding: 0; }
+  #pad .up { grid-column: 2; }
+  #pad .left { grid-column: 1; grid-row: 2; }
+  #pad .down { grid-column: 2; grid-row: 2; }
+  #pad .right { grid-column: 3; grid-row: 2; }
+  @media (pointer: coarse) {
+    #pad { grid-template-columns: repeat(3, 72px); grid-template-rows: repeat(2, 72px); }
+    #pad button { font-size: 34px; }
+  }
+  .overlay {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: #0004; padding: 16px;
+  }
+  .overlay.show { display: flex; }
+  .card {
+    max-width: 520px; max-height: calc(100vh - 32px); overflow-y: auto;
+    background: #fff; color: var(--ink); border-radius: 24px; padding: 24px 32px;
+    text-align: center; font-size: 24px; box-shadow: 0 10px 40px #0003;
+  }
+  .card .big { font-size: 72px; }
+  .card p { margin: 8px 0 18px; }
+  .card .small { font-size: 19px; opacity: 0.8; }
+  .card button { font-size: 26px; padding: 10px 24px; margin: 4px; }
+  .card a.btn {
+    display: inline-block; font-size: 26px; padding: 10px 24px; margin: 4px; border-radius: 14px;
+    background: #b9a89a; box-shadow: 0 3px 0 #8a7a6d; color: #fff; text-decoration: none;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <a href="index.html" class="home" title="Tillbaka till alla spel">🏠</a>
+    <h1>🐷 Gårdsäventyret</h1>
+    <span class="stat" id="goal" title="Det här vill mormor ha">Mål: 👵</span>
+    <button id="hint" title="Hjälp: vad kan jag göra nu?">💡</button>
+    <button id="mute" title="Ljud på/av">🔊</button>
+    <span id="hats"></span>
+  </header>
+
+  <canvas id="board"></canvas>
+  <p id="say"></p>
+  <div id="bagRow"><span class="label" title="Din väska">🎒</span><div id="bag"></div></div>
+
+  <div id="pad">
+    <button class="up" data-dir="0,-1">⬆️</button>
+    <button class="left" data-dir="-1,0">⬅️</button>
+    <button class="down" data-dir="0,1">⬇️</button>
+    <button class="right" data-dir="1,0">➡️</button>
+  </div>
+
+  <div id="intro" class="overlay show">
+    <div class="card">
+      <div class="big" id="introBig">👵</div>
+      <p id="introText"></p>
+      <p class="small">Gå runt och plocka upp saker. Tryck på två saker i väskan 🎒 för att sätta
+        ihop dem. Ge sakerna till djuren som vill ha dem. Fastnat? Tryck på 💡</p>
+      <button id="start">Nu kör vi! ▶</button>
+    </div>
+  </div>
+
+  <div id="won" class="overlay">
+    <div class="card">
+      <div class="big" id="wonBig">👵🎉</div>
+      <p id="wonText"></p>
+      <p id="earned" style="font-size: 30px; margin: 0 0 16px;"></p>
+      <button id="again">Spela igen 🔄</button>
+      <a class="btn" href="index.html">Alla spel 🏠</a>
+    </div>
+  </div>
+
+<script src="piggy.js"></script>
+<script>
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+
+// ---- The things piggy can carry ----
+const ITEMS = {
+  stick:    { icon: '🪵', name: 'en pinne' },
+  rock:     { icon: '🪨', name: 'en sten' },
+  hay:      { icon: '🌾', name: 'hö' },
+  axe:      { icon: '🪓', name: 'en yxa' },
+  broom:    { icon: '🧹', name: 'en kvast' },
+  flower:   { icon: '🌻', name: 'en solros' },
+  honey:    { icon: '🍯', name: 'honung' },
+  thread:   { icon: '🧵', name: 'en tråd' },
+  rod:      { icon: '🎣', name: 'ett fiskespö' },
+  fish:     { icon: '🐟', name: 'en fisk' },
+  rope:     { icon: '🪢', name: 'ett rep' },
+  ladder:   { icon: '🪜', name: 'en stege' },
+  banana:   { icon: '🍌', name: 'en banan' },
+  carrot:   { icon: '🥕', name: 'en morot' },
+  cheese:   { icon: '🧀', name: 'en ost' },
+  key:      { icon: '🗝️', name: 'en nyckel' },
+  corn:     { icon: '🌽', name: 'majs' },
+  egg:      { icon: '🥚', name: 'ett ägg' },
+  milk:     { icon: '🥛', name: 'mjölk' },
+  batter:   { icon: '🥣', name: 'smet' },
+  berry:    { icon: '🍓', name: 'jordgubbar' },
+  cake:     { icon: '🎂', name: 'en tårta' },
+  pan:      { icon: '🍳', name: 'en stekpanna' },
+  pancakes: { icon: '🥞', name: 'pannkakor' },
+  clover:   { icon: '🍀', name: 'en klöver' },
+  yarn:     { icon: '🧶', name: 'garn' },
+  apple:    { icon: '🍎', name: 'ett äpple' },
+  needle:   { icon: '🪡', name: 'en nål' },
+  scarf:    { icon: '🧣', name: 'en halsduk' },
+  ribbon:   { icon: '🎀', name: 'en rosett' },
+  present:  { icon: '🎁', name: 'en present' },
+};
+
+// ---- Animals (and a palm tree) that want something ----
+// When piggy brings it they say thanks and give something back.
+const WHO = {
+  cow:      { icon: '🐮', wants: 'hay', gives: 'milk',
+              ask: 'Kon är hungrig. Hon vill ha hö 🌾', say: 'Muu! Tack! Här är lite mjölk 🥛' },
+  hen:      { icon: '🐔', wants: 'corn', gives: 'egg',
+              ask: 'Hönan vill ha majs 🌽', say: 'Kluck kluck! Här är ett ägg 🥚' },
+  sheep:    { icon: '🐑', wants: 'clover', gives: 'yarn',
+              ask: 'Fåret vill ha en klöver 🍀', say: 'Bää! Tack! Här är lite garn 🧶' },
+  hedgehog: { icon: '🦔', wants: 'apple', gives: 'needle',
+              ask: 'Igelkotten vill ha ett äpple 🍎', say: 'Tack för äpplet! Här är en nål 🪡' },
+  bees:     { icon: '🐝', wants: 'flower', gives: 'honey',
+              ask: 'Bina vill ha en blomma 🌻', say: 'Bzzz! Tack! Här är lite honung 🍯' },
+  cat:      { icon: '🐱', wants: 'fish', gives: 'key',
+              ask: 'Katten vill ha en fisk 🐟', say: 'Mjau! Mums! Jag hittade den här nyckeln 🗝️' },
+  monkey:   { icon: '🐒', wants: 'banana', gives: 'key',
+              ask: 'Apan vill ha en banan 🍌', say: 'Uh uh ah ah! Tack! Här är en nyckel 🗝️' },
+  palm:     { icon: '🌴', short: 'palmen', still: true, wants: 'ladder', gives: 'banana',
+              ask: 'Högst upp i palmen hänger en banan 🍌 Hur kommer du upp?',
+              say: 'Du klättrade upp och plockade en banan! 🍌', doneSay: 'Palmen har inga fler bananer.' },
+  mouse:    { icon: '🐭', wants: 'cheese', gives: 'key',
+              ask: 'Musen vill ha ost 🧀', say: 'Pip pip! Ost! Här är en nyckel 🗝️' },
+  goat:     { icon: '🐐', wants: 'carrot', gives: 'cheese',
+              ask: 'Geten vill ha en morot 🥕', say: 'Bä! Tack för moroten! Här är en ost 🧀' },
+};
+
+// ---- Every round is put together from one of each of these three lists ----
+// `spawn` lists what to put where: [field, item or animal]. Field A is left of the trees,
+// B is top right and C is bottom right, behind the gate.
+// Two things can only be put together if a `recipes` entry in this round says so.
+
+// 1. What blocks the way from field A to field B
+const BLOCKERS = [
+  { blocker: { kind: 'log', short: 'trädet', wants: 'axe',
+               ask: 'Ett träd ligger i vägen! Kan du hugga bort det? 🪓', say: 'Hugg hugg! Nu är vägen fri!' },
+    recipes: [['stick', 'rock', 'axe', 'Du gjorde en yxa!']],
+    spawn: [['A', 'stick'], ['A', 'rock']] },
+  { blocker: { kind: 'web', short: 'spindelnätet', wants: 'broom',
+               ask: 'Ett stort spindelnät är i vägen! 🕸️ Kan du sopa bort det?', say: 'Svisch! Spindelnätet är borta!' },
+    recipes: [['stick', 'hay', 'broom', 'Du gjorde en kvast!']],
+    spawn: [['A', 'stick'], ['A', 'hay']] },
+  { blocker: { icon: '🐻', short: '🐻', wants: 'honey', wiggle: true,
+               ask: 'En björn sitter i vägen. Den vill ha honung 🍯', say: 'Mums! Björnen tar honungen och lunkar iväg 🐻' },
+    recipes: [],
+    spawn: [['A', 'bees'], ['A', 'flower']] },
+];
+
+// 2. Who has the key to the gate between field B and field C
+const KEYHOLDERS = [
+  { recipes: [['stick', 'thread', 'rod', 'Du gjorde ett fiskespö!']],
+    spawn: [['B', 'cat'], ['B', 'stick'], ['B', 'thread'], ['pond', 'fishing']] },
+  { recipes: [['stick', 'rope', 'ladder', 'Du gjorde en stege!']],
+    spawn: [['B', 'monkey'], ['B', 'palm'], ['B', 'stick'], ['B', 'rope']] },
+  { recipes: [],
+    spawn: [['B', 'mouse'], ['B', 'goat'], ['A', 'carrot']] },
+];
+
+// 3. What Grandma wants
+const GOALS = [
+  { item: 'cake', ask: 'Mormor fyller år och önskar sig en tårta 🎂', say: 'En tårta! Tack, lilla gris! 💖',
+    intro: 'Mormor fyller år!<br>Hjälp grisen att göra en <b>tårta</b> till henne.',
+    recipes: [['egg', 'milk', 'batter', 'Du gjorde tårtsmet!'], ['batter', 'berry', 'cake', 'Du gjorde en jordgubbstårta!']],
+    spawn: [['A', 'cow'], ['A', 'hay'], ['B', 'hen'], ['B', 'corn'], ['C', 'berry']] },
+  { item: 'pancakes', ask: 'Mormor är hungrig och vill ha pannkakor 🥞', say: 'Pannkakor! Mina favoriter! Tack, lilla gris! 💖',
+    intro: 'Mormor är hungrig!<br>Hjälp grisen att göra <b>pannkakor</b> till henne.',
+    recipes: [['egg', 'milk', 'batter', 'Du gjorde pannkakssmet!'], ['batter', 'pan', 'pancakes', 'Du stekte pannkakor!']],
+    spawn: [['A', 'hen'], ['A', 'corn'], ['B', 'cow'], ['B', 'hay'], ['C', 'pan']] },
+  { item: 'present', ask: 'Mormor fryser. En present skulle göra henne glad 🎁',
+    say: 'En halsduk! Nu fryser jag inte. Tack, lilla gris! 💖',
+    intro: 'Mormor fryser!<br>Hjälp grisen att göra en <b>present</b> till henne.',
+    recipes: [['yarn', 'needle', 'scarf', 'Du stickade en halsduk!'], ['scarf', 'ribbon', 'present', 'Du slog in en present!']],
+    spawn: [['A', 'sheep'], ['A', 'clover'], ['B', 'hedgehog'], ['B', 'apple'], ['C', 'ribbon']] },
+];
+
+// ---- The map. Each letter is one tile. ----
+//  T tree   ~ water   # fence   , flowers   . grass   P piggy starts here
+//  f fishing spot in the pond   L what blocks the way   G the locked gate
+//  H Grandma's house   a Grandma
+const MAP = [
+  'TTTTTTTTTTTTTTTTTTTT',
+  'T......,..T.......,T',
+  'T..~~~....T.,......T',
+  'T.~~~~f...T........T',
+  'T..~~~....L........T',
+  'T.,.......T......,.T',
+  'T....P....T........T',
+  'T......,..T#####G##T',
+  'T.........T.,......T',
+  'T.........T........T',
+  'T.........T...H.a..T',
+  'T..,......T......,.T',
+  'TTTTTTTTTTTTTTTTTTTT',
+];
+const fieldOf = (x, y) => x < 10 ? 'A' : y < 7 ? 'B' : 'C';
+
+// ---- Game state ----
+let ground, entities, pig, drawPos, bag, chosen, steps, won, hint, recipes;
+let parts = {};   // the blocker, key holder and goal picked for this round
+let tile = 32;
+const cols = MAP[0].length, rows = MAP.length;
+const particles = [];
+const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
+const sayEl = document.getElementById('say');
+const pick = list => list[Math.floor(Math.random() * list.length)];
+
+function newGame() {
+  // A new blocker, key holder and goal each round (never the same as last time)
+  const fresh = (list, old) => pick(list.filter(p => p !== old));
+  parts = { blocker: fresh(BLOCKERS, parts.blocker), keys: fresh(KEYHOLDERS, parts.keys), goal: fresh(GOALS, parts.goal) };
+  const all = [parts.blocker, parts.keys, parts.goal];
+  recipes = all.flatMap(p => p.recipes).map(([a, b, makes, text]) => ({ a, b, makes, text, left: 1 }));
+  for (let tries = 0; tries < 100; tries++) {
+    placeEverything(all.flatMap(p => p.spawn));
+    if (canBeFinished()) break;
+  }
+  drawPos = { x: pig.x, y: pig.y };
+  bag = [];
+  chosen = null;
+  steps = 0;
+  won = false;
+  hint = null;
+  say('');
+  renderBag();
+  const goalIcon = ITEMS[parts.goal.item].icon;
+  document.getElementById('goal').textContent = `Mål: 👵 ${goalIcon}`;
+  document.getElementById('introBig').textContent = `👵${goalIcon}`;
+  document.getElementById('introText').innerHTML = parts.goal.intro;
+  document.getElementById('won').classList.remove('show');
+  document.getElementById('intro').classList.add('show');
+  resize();
+}
+
+function placeEverything(spawn) {
+  ground = MAP.map(row => [...row].map(ch => ch === 'f' ? '~' : '~T#,'.includes(ch) ? ch : '.'));
+  entities = [];
+  let pond;
+  const wobble = () => Math.random() * Math.PI * 2;
+  MAP.forEach((row, y) => [...row].forEach((ch, x) => {
+    const at = { x, y, wobble: wobble() };
+    if (ch === 'P') pig = { x, y, face: 1 };
+    if (ch === 'f') pond = { x, y };
+    if (ch === 'L') entities.push({ ...at, ...parts.blocker.blocker, vanish: true, dirt: true });
+    if (ch === 'G') entities.push({ ...at, kind: 'gate', short: 'grinden', wants: 'key', vanish: true,
+      ask: 'Grinden är låst 🔒 Du behöver en nyckel 🗝️', say: 'Klick! Grinden är öppen 🔓' });
+    if (ch === 'H') entities.push({ ...at, icon: '🏠', size: 1.4 });
+    if (ch === 'a') entities.push({ ...at, icon: '👵', short: '👵', wants: parts.goal.item, win: true,
+      ask: parts.goal.ask, say: parts.goal.say });
+  }));
+  // Animals first, then the things to pick up
+  const order = [...spawn.filter(([, what]) => WHO[what]), ...spawn.filter(([, what]) => !WHO[what])];
+  for (const [field, what] of order) {
+    if (what === 'fishing') {
+      entities.push({ ...pond, wobble: wobble(), kind: 'fish', short: 'fiskarna', wants: 'rod', gives: 'fish',
+        vanish: true, ask: 'Här simmar det fiskar! Kan du fånga en? 🎣', say: 'Du fångade en fisk! 🐟' });
+      continue;
+    }
+    const who = WHO[what];
+    const free = [];
+    for (let y = 1; y < rows - 1; y++) {
+      for (let x = 1; x < cols - 1; x++) {
+        if (fieldOf(x, y) !== field || !open(x, y) || (x === pig.x && y === pig.y)) continue;
+        if (who && !roomAround(x, y)) continue;
+        free.push([x, y]);
+      }
+    }
+    const [x, y] = pick(free);
+    entities.push(who ? { x, y, short: who.icon, wiggle: !who.still, ...who, wobble: wobble() }
+                      : { x, y, item: what, wobble: wobble() });
+  }
+}
+
+const open = (x, y) => '.,'.includes(ground[y][x]) && !entityAt(x, y);
+// Animals stand with free grass all around them, so they never block a path
+const roomAround = (x, y) => [-1, 0, 1].every(dx => [-1, 0, 1].every(dy => open(x + dx, y + dy)));
+
+// All the tiles piggy can walk to from (x, y)
+function flood(x0, y0, ok) {
+  const seen = new Set([x0 + ',' + y0]);
+  const queue = [[x0, y0]];
+  while (queue.length) {
+    const [x, y] = queue.pop();
+    for (const [dx, dy] of DIRS) {
+      const nx = x + dx, ny = y + dy, key = nx + ',' + ny;
+      if (!seen.has(key) && ok(nx, ny)) { seen.add(key); queue.push([nx, ny]); }
+    }
+  }
+  return seen;
+}
+
+// Plays the round through in its head, to make sure it can be finished
+function canBeFinished() {
+  const ents = entities.map(e => ({ ...e }));
+  const inv = [], left = recipes.map(r => r.left);
+  const blocked = (x, y) => ents.some(e => e.x === x && e.y === y && !e.item);
+  for (let progress = true; progress;) {
+    progress = false;
+    const seen = flood(pig.x, pig.y, (x, y) => '.,'.includes(ground[y][x]) && !blocked(x, y));
+    for (const e of [...ents]) {
+      const reach = e.item ? seen.has(e.x + ',' + e.y)
+                           : DIRS.some(([dx, dy]) => seen.has((e.x + dx) + ',' + (e.y + dy)));
+      if (!reach) continue;
+      if (e.item) {
+        inv.push(e.item);
+        ents.splice(ents.indexOf(e), 1);
+        progress = true;
+      } else if (e.wants && inv.includes(e.wants)) {
+        inv.splice(inv.indexOf(e.wants), 1);
+        if (e.win) return true;
+        if (e.gives) inv.push(e.gives);
+        if (e.vanish) ents.splice(ents.indexOf(e), 1); else e.wants = null;
+        progress = true;
+      }
+    }
+    recipes.forEach((r, i) => {
+      if (left[i] && inv.includes(r.a) && inv.includes(r.b)) {
+        inv.splice(inv.indexOf(r.a), 1);
+        inv.splice(inv.indexOf(r.b), 1);
+        inv.push(r.makes);
+        left[i]--;
+        progress = true;
+      }
+    });
+  }
+  return false;
+}
+
+const entityAt = (x, y) => entities.find(e => e.x === x && e.y === y);
+const solid = e => e && !e.item;
+const walkable = (x, y) => '.,'.includes(ground[y][x]) && !solid(entityAt(x, y));
+const paused = () => document.querySelector('.overlay.show') || won || Piggy.isOpen();
+
+function say(text) {
+  sayEl.innerHTML = text;
+  sayEl.classList.remove('poof');
+  if (text) { void sayEl.offsetWidth; sayEl.classList.add('poof'); }
+}
+
+// ---- Moving the pig ----
+function move(dx, dy, quiet) {
+  if (paused()) return;
+  const nx = pig.x + dx, ny = pig.y + dy;
+  if (dx) pig.face = dx;
+  const e = entityAt(nx, ny);
+  if (solid(e)) { meet(e, quiet); return; }
+  if (!walkable(nx, ny)) { if (!quiet) sound('bump'); return; }
+  pig.x = nx; pig.y = ny;
+  steps++;
+  if (e?.item) pickUp(e);
+}
+
+function pickUp(e) {
+  entities.splice(entities.indexOf(e), 1);
+  bag.push(e.item);
+  const it = ITEMS[e.item];
+  say(`Du hittade ${it.name} ${it.icon}`);
+  sound('pick');
+  burst(e.x, e.y, ['✨', it.icon], 6);
+  renderBag(bag.length - 1);
+}
+
+// Piggy walks into a character or obstacle
+let lastAsk = -Infinity;
+function meet(e, quiet) {
+  const now = performance.now();
+  if (e.wants && bag.includes(e.wants)) {
+    bag.splice(bag.indexOf(e.wants), 1);
+    chosen = null;
+    sound('yes');
+    burst(e.x, e.y, ['💖', '⭐', ITEMS[e.wants].icon], 12);
+    if (e.gives) bag.push(e.gives);
+    if (e.vanish) entities.splice(entities.indexOf(e), 1);
+    else { e.wants = null; e.happyUntil = now + 2500; }
+    say(e.say);
+    renderBag(e.gives ? bag.length - 1 : undefined);
+    if (e.win) win();
+    return;
+  }
+  if (!e.wants && e.say && e.happyUntil) {   // already helped
+    if (now - lastAsk > 1500) { e.happyUntil = now + 1500; say(e.doneSay ?? 'Tack! 💖'); lastAsk = now; }
+    return;
+  }
+  if (e.wants) {
+    if (now - lastAsk > 1500) { say(e.ask); sound('hello'); lastAsk = now; }
+    return;
+  }
+  if (!quiet) sound('bump');
+}
+
+// ---- The bag ----
+function renderBag(poofIndex) {
+  const box = document.getElementById('bag');
+  box.innerHTML = '';
+  const slots = Math.max(bag.length, 5);
+  for (let i = 0; i < slots; i++) {
+    const btn = document.createElement('button');
+    const key = bag[i];
+    if (!key) { btn.className = 'empty'; btn.disabled = true; box.appendChild(btn); continue; }
+    btn.textContent = ITEMS[key].icon;
+    btn.title = ITEMS[key].name;
+    if (i === chosen) btn.classList.add('chosen');
+    if (hint?.slots?.includes(i)) btn.classList.add('hint');
+    if (i === poofIndex) btn.classList.add('poof');
+    btn.onclick = () => { btn.blur(); tapSlot(i); };
+    box.appendChild(btn);
+  }
+}
+
+function tapSlot(i) {
+  if (paused() || !bag[i]) return;
+  if (chosen === null) { chosen = i; sound('tick'); say(`${ITEMS[bag[i]].icon} + ?`); }
+  else if (chosen === i) { chosen = null; say(''); }
+  else { combine(chosen, i); return; }
+  renderBag();
+}
+
+function combine(i, j) {
+  const a = bag[i], b = bag[j];
+  const r = recipes.find(r => r.left && ((r.a === a && r.b === b) || (r.a === b && r.b === a)));
+  chosen = null;
+  if (!r) {
+    sound('no');
+    say(`${ITEMS[a].icon} + ${ITEMS[b].icon} = 🤔 De passar inte ihop.`);
+    renderBag();
+    for (const k of [i, j]) document.getElementById('bag').children[k].classList.add('shake');
+    return;
+  }
+  const at = Math.min(i, j);
+  bag.splice(Math.max(i, j), 1);
+  bag.splice(at, 1, r.makes);
+  r.left--;
+  hint = null;
+  sound('yes');
+  say(`${ITEMS[a].icon} + ${ITEMS[b].icon} = ${ITEMS[r.makes].icon} ${r.text}`);
+  burst(pig.x, pig.y, ['✨', ITEMS[r.makes].icon], 8);
+  renderBag(at);
+}
+
+// ---- Help: suggest one thing to do next ----
+const reachable = () => flood(pig.x, pig.y, walkable);
+
+function giveHint() {
+  if (paused()) return;
+  const seen = reachable();
+  const near = e => DIRS.some(([dx, dy]) => seen.has((e.x + dx) + ',' + (e.y + dy)));
+  const until = performance.now() + 4000;
+  const ready = entities.find(e => e.wants && bag.includes(e.wants) && near(e));
+  const recipe = recipes.find(r => r.left && bag.includes(r.a) && bag.includes(r.b));
+  const items = entities.filter(e => e.item && seen.has(e.x + ',' + e.y))
+    .sort((p, q) => (Math.abs(p.x - pig.x) + Math.abs(p.y - pig.y)) - (Math.abs(q.x - pig.x) + Math.abs(q.y - pig.y)));
+  if (ready) {
+    hint = { until, x: ready.x, y: ready.y };
+    say(`💡 Ta med ${ITEMS[ready.wants].icon} till ${ready.short}!`);
+  } else if (recipe) {
+    hint = { until, slots: [bag.indexOf(recipe.a), bag.indexOf(recipe.b)] };
+    say(`💡 Prova att sätta ihop ${ITEMS[recipe.a].icon} och ${ITEMS[recipe.b].icon}!`);
+  } else if (items.length) {
+    hint = { until, x: items[0].x, y: items[0].y };
+    say('💡 Där borta ligger det något! ✨');
+  } else {
+    say('💡 Titta runt! Vem vill ha något? 👀');
+  }
+  sound('tick');
+  renderBag();
+  setTimeout(() => { if (hint && performance.now() >= hint.until) { hint = null; renderBag(); } }, 4100);
+}
+
+function win() {
+  won = true;
+  sound('win');
+  const goalIcon = ITEMS[parts.goal.item].icon;
+  for (let i = 0; i < 40; i++) {
+    burst(Math.random() * cols, Math.random() * rows, ['🎉', goalIcon, '⭐', '💖', '🎈'], 1);
+  }
+  document.getElementById('wonBig').textContent = `👵${goalIcon}🎉`;
+  document.getElementById('wonText').textContent = `Hurra! Grisen hjälpte mormor på ${steps} steg.`;
+  document.getElementById('earned').textContent = `+${Piggy.reward(15)} 🪙`;   // coins for the hat shop
+  setTimeout(() => document.getElementById('won').classList.add('show'), 1500);
+}
+
+// ---- Controls: arrow keys / WASD (hold to keep walking), number keys pick from the bag ----
+const KEYS = {
+  ArrowUp: [0, -1], ArrowDown: [0, 1], ArrowLeft: [-1, 0], ArrowRight: [1, 0],
+  w: [0, -1], s: [0, 1], a: [-1, 0], d: [1, 0],
+};
+const held = new Map();
+let lastMove = 0;
+const STEP_MS = 150;
+
+function press(id, dir) {
+  if (held.has(id)) return;
+  held.set(id, dir);
+  move(dir[0], dir[1]);
+  lastMove = performance.now();
+}
+
+addEventListener('keydown', e => {
+  const shown = document.querySelector('.overlay.show');
+  if (shown) {
+    if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); shown.querySelector('button').click(); }
+    return;
+  }
+  if (/^[1-9]$/.test(e.key)) { tapSlot(Number(e.key) - 1); return; }
+  if (e.key === 'Escape') { chosen = null; renderBag(); return; }
+  const key = e.key.length === 1 ? e.key.toLowerCase() : e.key;
+  const dir = KEYS[key];
+  if (!dir) return;
+  e.preventDefault();
+  press(key, dir);
+});
+addEventListener('keyup', e => held.delete(e.key.length === 1 ? e.key.toLowerCase() : e.key));
+addEventListener('blur', () => held.clear());
+
+document.querySelectorAll('#pad button').forEach(btn => {
+  const dir = btn.dataset.dir.split(',').map(Number);
+  btn.addEventListener('pointerdown', e => { e.preventDefault(); press('pad', dir); });
+  ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev =>
+    btn.addEventListener(ev, () => held.delete('pad')));
+});
+
+// Touch: drag on the map to walk, or tap to take one step that way
+let dragFrom = null, dragged = false;
+canvas.addEventListener('pointerdown', e => {
+  dragFrom = [e.clientX, e.clientY];
+  dragged = false;
+  canvas.setPointerCapture(e.pointerId);
+});
+canvas.addEventListener('pointermove', e => {
+  if (!dragFrom) return;
+  const dx = e.clientX - dragFrom[0], dy = e.clientY - dragFrom[1];
+  if (Math.hypot(dx, dy) < 25) return;
+  const dir = Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)];
+  const current = held.get('drag');
+  if (!current || current[0] !== dir[0] || current[1] !== dir[1]) {
+    held.delete('drag');
+    press('drag', dir);
+    dragFrom = [e.clientX - dir[0] * 25, e.clientY - dir[1] * 25];
+  }
+  dragged = true;
+});
+const endDrag = e => {
+  if (dragFrom && !dragged && e.type === 'pointerup') {
+    const rect = canvas.getBoundingClientRect();
+    const dx = e.clientX - rect.left - (pig.x + 0.5) * tile;
+    const dy = e.clientY - rect.top - (pig.y + 0.5) * tile;
+    if (Math.hypot(dx, dy) > tile / 2) {
+      move(...(Math.abs(dx) > Math.abs(dy) ? [Math.sign(dx), 0] : [0, Math.sign(dy)]));
+    }
+  }
+  dragFrom = null;
+  held.delete('drag');
+};
+canvas.addEventListener('pointerup', endDrag);
+canvas.addEventListener('pointercancel', endDrag);
+
+document.getElementById('start').onclick = () => document.getElementById('intro').classList.remove('show');
+document.getElementById('again').onclick = newGame;
+document.getElementById('hint').onclick = e => { e.currentTarget.blur(); giveHint(); };
+
+// ---- Sounds (Web Audio, no files needed) ----
+let audio, muted = false;
+addEventListener('pointerdown', () => {
+  try { audio ??= new AudioContext(); audio.resume(); } catch (_) { /* no audio available */ }
+});
+function tone(freq, dur, type, delay, vol) {
+  audio ??= new AudioContext();
+  if (audio.state === 'suspended') audio.resume();
+  const t = audio.currentTime + delay;
+  const osc = audio.createOscillator();
+  const gain = audio.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  osc.connect(gain).connect(audio.destination);
+  osc.start(t);
+  osc.stop(t + dur);
+}
+function sound(name) {
+  if (muted) return;
+  try {
+    if (name === 'pick') { tone(660, 0.1, 'square', 0, 0.07); tone(990, 0.15, 'square', 0.08, 0.07); }
+    if (name === 'tick') tone(880, 0.06, 'triangle', 0, 0.15);
+    if (name === 'bump') tone(110, 0.08, 'triangle', 0, 0.2);
+    if (name === 'hello') { tone(440, 0.12, 'sine', 0, 0.2); tone(330, 0.2, 'sine', 0.12, 0.2); }
+    if (name === 'yes') [660, 880, 1320].forEach((f, i) => tone(f, 0.15, 'triangle', i * 0.08, 0.2));
+    if (name === 'no') { tone(220, 0.15, 'sawtooth', 0, 0.08); tone(160, 0.25, 'sawtooth', 0.15, 0.08); }
+    if (name === 'win') [523, 659, 784, 1047].forEach((f, i) => tone(f, 0.3, 'triangle', i * 0.13, 0.2));
+  } catch (_) { /* no audio available */ }
+}
+document.getElementById('mute').onclick = e => {
+  muted = !muted;
+  e.currentTarget.textContent = muted ? '🔇' : '🔊';
+  e.currentTarget.blur();
+};
+
+// ---- Piggy's hat: chosen and bought in the hat shop (piggy.js), shared by all the games ----
+let hat = Piggy.hat();
+Piggy.onHatChange(h => { hat = h; resize(); });
+Piggy.mount(document.getElementById('hats'));
+
+// ---- Sparkles ----
+function burst(x, y, chars, n) {
+  for (let i = 0; i < n; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 0.03 + Math.random() * 0.06;
+    particles.push({
+      x: x + 0.5, y: y + 0.5,
+      vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 0.04,
+      life: 1, ch: chars[Math.floor(Math.random() * chars.length)],
+    });
+  }
+}
+
+// ---- Drawing ----
+function resize() {
+  const used = ['header', '#say', '#bagRow', '#pad']
+    .reduce((h, sel) => h + document.querySelector(sel).offsetHeight, 0);
+  const availW = Math.min(window.innerWidth - 32, 1100);
+  const availH = window.innerHeight - used - 28;
+  tile = Math.max(16, Math.floor(Math.min(availW / cols, availH / rows)));
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = cols * tile * dpr;
+  canvas.height = rows * tile * dpr;
+  canvas.style.width = cols * tile + 'px';
+  canvas.style.height = rows * tile + 'px';
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+}
+addEventListener('resize', resize);
+
+function emoji(ch, x, y, size, flip, angle = 0) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (flip) ctx.scale(-1, 1);
+  if (angle) ctx.rotate(angle);
+  ctx.fillStyle = '#000';
+  ctx.font = `${size}px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(ch, 0, 0);
+  ctx.restore();
+}
+
+function drawFence(x, y) {
+  const px = x * tile, py = y * tile;
+  ctx.fillStyle = '#a8703a';
+  ctx.fillRect(px, py + tile * 0.3, tile, tile * 0.12);
+  ctx.fillRect(px, py + tile * 0.6, tile, tile * 0.12);
+  ctx.fillStyle = '#8a5527';
+  ctx.fillRect(px + tile * 0.1, py + tile * 0.15, tile * 0.14, tile * 0.7);
+  ctx.fillRect(px + tile * 0.76, py + tile * 0.15, tile * 0.14, tile * 0.7);
+}
+
+// A speech bubble above a character showing what it wants
+function bubble(x, y, icon, pop) {
+  const cx = (x + 0.5) * tile, cy = (y - 0.35) * tile;
+  const r = tile * 0.36 * pop;
+  ctx.fillStyle = '#fff';
+  ctx.strokeStyle = 'rgba(90, 59, 46, 0.35)';
+  ctx.lineWidth = 2;
+  ctx.beginPath();
+  ctx.arc(cx, cy, r, 0, Math.PI * 2);
+  ctx.moveTo(cx - r * 0.3, cy + r * 0.8);
+  ctx.lineTo(cx, cy + r * 1.5);
+  ctx.lineTo(cx + r * 0.3, cy + r * 0.8);
+  ctx.fill();
+  ctx.stroke();
+  emoji(icon, cx, cy, r * 1.25);
+}
+
+function draw(now) {
+  if (held.size && now - lastMove > STEP_MS) {
+    const dir = [...held.values()].pop();
+    move(dir[0], dir[1], true);
+    lastMove = now;
+  }
+
+  // Ground
+  for (let y = 0; y < rows; y++) {
+    for (let x = 0; x < cols; x++) {
+      const g = ground[y][x];
+      const px = x * tile, py = y * tile;
+      if (g === '~') {
+        ctx.fillStyle = '#5bb8e8';
+        ctx.fillRect(px, py, tile, tile);
+        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+        ctx.lineWidth = 2;
+        ctx.beginPath();
+        const wave = Math.sin(now / 400 + x + y * 2) * tile * 0.08;
+        ctx.moveTo(px + tile * 0.2, py + tile * 0.5 + wave);
+        ctx.quadraticCurveTo(px + tile * 0.5, py + tile * 0.35 + wave, px + tile * 0.8, py + tile * 0.5 + wave);
+        ctx.stroke();
+        continue;
+      }
+      ctx.fillStyle = (x + y) % 2 ? '#9ad66b' : '#a3dc74';
+      if (g === 'T') ctx.fillStyle = '#7fbf55';
+      ctx.fillRect(px, py, tile, tile);
+      if (g === 'T') emoji((x * 7 + y * 3) % 4 ? '🌳' : '🌲', px + tile / 2, py + tile / 2, tile * 0.95);
+      if (g === ',') emoji((x + y) % 2 ? '🌼' : '🌷', px + tile / 2, py + tile / 2, tile * 0.42);
+      if (g === '#') drawFence(x, y);
+    }
+  }
+
+  // Things lying around, characters and obstacles
+  for (const e of entities) {
+    const cx = (e.x + 0.5) * tile, cy = (e.y + 0.5) * tile;
+    const bob = Math.sin(now / 300 + e.wobble) * tile * 0.06;
+    if (e.dirt) {
+      ctx.fillStyle = '#c9a26b';   // a dirt path under the blocker, so it looks like a way through
+      ctx.fillRect(e.x * tile, e.y * tile, tile, tile);
+    }
+    if (e.item) {
+      emoji(ITEMS[e.item].icon, cx, cy + bob, tile * 0.6);
+    } else if (e.kind === 'fish') {
+      const jump = Math.max(0, Math.sin(now / 350 + e.wobble)) * tile * 0.25;
+      emoji('🐟', cx, cy - jump, tile * 0.55, Math.sin(now / 700) > 0);
+    } else if (e.kind === 'log') {
+      emoji('🌲', cx, cy, tile * 0.95, false, Math.PI / 2);
+    } else if (e.kind === 'web') {
+      emoji('🕸️', cx, cy, tile * 0.9);
+    } else if (e.kind === 'gate') {
+      drawFence(e.x, e.y);
+      emoji('🔒', cx, cy, tile * 0.55);
+    } else {
+      const wiggle = e.wiggle ? Math.sin(now / 200 + e.wobble) * 0.12 : 0;
+      emoji(e.icon, cx, cy + (e.size ? -tile * 0.15 : 0), tile * (e.size || 0.85), false, wiggle);
+    }
+  }
+
+  // Piggy glides toward its tile
+  drawPos.x += (pig.x - drawPos.x) * 0.35;
+  drawPos.y += (pig.y - drawPos.y) * 0.35;
+  const hop = won ? Math.abs(Math.sin(now / 120)) * tile * 0.25 : 0;
+  emoji('🐷', (drawPos.x + 0.5) * tile, (drawPos.y + 0.5) * tile - hop, tile * 0.85, pig.face < 0);
+  if (hat) {
+    emoji(hat, (drawPos.x + 0.5) * tile, (drawPos.y + 0.12) * tile - hop, tile * 0.5, pig.face < 0, -0.15);
+  }
+
+  // Speech bubbles: what nearby characters want, or a heart after being helped
+  for (const e of entities) {
+    const dist = Math.abs(e.x - pig.x) + Math.abs(e.y - pig.y);
+    const pop = 1 + Math.sin(now / 250) * 0.05;
+    if (e.wants && dist <= 2 && !won) bubble(e.x, e.y, ITEMS[e.wants].icon, pop);
+    else if (e.happyUntil > now) bubble(e.x, e.y, '💖', pop);
+  }
+
+  // Help: a pulsing ring around the suggested spot
+  if (hint && hint.x !== undefined && now < hint.until) {
+    ctx.strokeStyle = '#ffc35a';
+    ctx.lineWidth = 4;
+    ctx.beginPath();
+    ctx.arc((hint.x + 0.5) * tile, (hint.y + 0.5) * tile, tile * (0.6 + Math.sin(now / 150) * 0.1), 0, Math.PI * 2);
+    ctx.stroke();
+  }
+
+  // Sparkles
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx; p.y += p.vy; p.vy += 0.002; p.life -= 0.015;
+    if (p.life <= 0) { particles.splice(i, 1); continue; }
+    ctx.globalAlpha = p.life;
+    emoji(p.ch, p.x * tile, p.y * tile, tile * 0.5);
+    ctx.globalAlpha = 1;
+  }
+
+  requestAnimationFrame(draw);
+}
+
+newGame();
+requestAnimationFrame(draw);
+</script>
+</body>
+</html>

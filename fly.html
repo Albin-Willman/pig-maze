@@ -1,0 +1,755 @@
+<!doctype html>
+<html lang="sv">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Grisen">
+<title>Grisens flygtur</title>
+<style>
+  :root {
+    --bg: #e4f5fb;
+    --text: #1f4a5c;
+    --ink: #5a3b2e;
+    --accent: #ff8fb1;
+    --accent-dark: #c4577b;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    min-height: 100vh;
+    background: var(--bg);
+    color: var(--text);
+    transition: background 0.6s, color 0.6s;
+    font-family: "Comic Sans MS", "Chalkboard SE", "Comic Neue", system-ui, sans-serif;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
+    -webkit-tap-highlight-color: transparent;
+    touch-action: none;            /* holding a finger anywhere flies the plane */
+    overscroll-behavior: none;
+  }
+  header {
+    display: flex; gap: 12px; align-items: center; flex-wrap: wrap; justify-content: center;
+    padding: 10px 16px;
+  }
+  h1 { margin: 0; font-size: clamp(22px, 4vw, 34px); }
+  .stat {
+    font-size: clamp(18px, 3vw, 24px); color: var(--ink); background: #fff;
+    border-radius: 999px; padding: 4px 16px; box-shadow: 0 2px 0 #0001;
+  }
+  .home {
+    font-size: 22px; text-decoration: none; padding: 6px 12px; border-radius: 14px;
+    background: #fff; box-shadow: 0 3px 0 #0002;
+  }
+  .home:active { transform: translateY(2px); box-shadow: 0 1px 0 #0002; }
+  button {
+    font: inherit; font-size: 20px; border: none; border-radius: 14px; padding: 6px 14px;
+    background: var(--accent); color: #fff; cursor: pointer;
+    box-shadow: 0 3px 0 var(--accent-dark); touch-action: manipulation;
+  }
+  button:active { transform: translateY(2px); box-shadow: 0 1px 0 var(--accent-dark); }
+  #board { border-radius: 16px; box-shadow: 0 6px 20px #0002; display: block; }
+  #tip { margin: 10px 16px; font-size: clamp(16px, 2.5vw, 20px); text-align: center; opacity: 0.8; }
+  .overlay {
+    position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: #0004; padding: 16px;
+  }
+  .overlay.show { display: flex; }
+  .card {
+    max-width: 520px; max-height: calc(100vh - 32px); overflow-y: auto;
+    background: #fff; color: var(--ink); border-radius: 24px; padding: 24px 32px;
+    text-align: center; font-size: 24px; box-shadow: 0 10px 40px #0003;
+  }
+  .card .big { font-size: 72px; }
+  .card p { margin: 8px 0 18px; }
+  .card .small { font-size: 19px; opacity: 0.8; }
+  .card button { font-size: 26px; padding: 10px 24px; margin: 4px; }
+  .card a.btn {
+    display: inline-block; font-size: 26px; padding: 10px 24px; margin: 4px; border-radius: 14px;
+    background: #b9a89a; box-shadow: 0 3px 0 #8a7a6d; color: #fff; text-decoration: none;
+  }
+</style>
+</head>
+<body>
+  <header>
+    <a href="index.html" class="home" title="Tillbaka till alla spel">🏠</a>
+    <h1>🐷 Flygturen</h1>
+    <span class="stat" id="lives" title="Liv">❤️❤️❤️❤️❤️</span>
+    <span class="stat" id="score" title="Bananer">🍌 0</span>
+    <span class="stat" id="meters" title="Så långt har du flugit">0 / 200 m</span>
+    <button id="mute" title="Ljud på/av">🔊</button>
+    <span id="hats"></span>
+  </header>
+
+  <canvas id="board"></canvas>
+  <p id="tip">Håll nere mellanslag, pil upp eller fingret för att flyga uppåt. Släpp för att sjunka.</p>
+
+  <div id="ready" class="overlay show">
+    <div class="card">
+      <div class="big">🐷✈️🏁</div>
+      <p>Flyg hela vägen till målet 🏁<br>och plocka bananer på vägen!</p>
+      <p class="small">Håll nere <b>mellanslag</b>, <b>pil upp</b> eller <b>fingret</b> för att flyga uppåt.
+        Släpp för att sjunka. Akta dig för marken och taket!</p>
+      <p class="small" id="bestReady"></p>
+      <button id="start">Lyft! ✈️</button>
+    </div>
+  </div>
+
+  <div id="over" class="overlay">
+    <div class="card">
+      <div class="big">💥🐷</div>
+      <p id="overText"></p>
+      <p id="earnedOver" style="font-size: 30px; margin: 0 0 16px;"></p>
+      <button id="again">Försök igen ✈️</button>
+      <a class="btn" href="index.html">Alla spel 🏠</a>
+    </div>
+  </div>
+
+  <div id="won" class="overlay">
+    <div class="card">
+      <div class="big">🏁🐷🎉</div>
+      <p id="wonText"></p>
+      <p id="earned" style="font-size: 30px; margin: 0 0 16px;"></p>
+      <p class="small" id="bestWon"></p>
+      <button id="again2">Flyg en ny bana ✈️</button>
+      <a class="btn" href="index.html">Alla spel 🏠</a>
+    </div>
+  </div>
+
+<script src="piggy.js"></script>
+<script>
+const canvas = document.getElementById('board');
+const ctx = canvas.getContext('2d');
+
+// ---- World size and how the plane flies ----
+// The world is H units tall; the canvas is scaled to fit, so the game plays the same on every screen.
+const H = 400;
+const SEG = 20;              // the ground and the ceiling are made of points this far apart
+const GRAVITY = 460;         // how fast the plane sinks (units / second²)
+const LIFT = 1040;           // how hard it climbs while you hold (units / second²)
+const MAX_VY = 270;
+const PLANE_R = 10;          // how tall the plane is, for crashing (half height)
+const PLANE_HALF = 22;       // half the plane's length
+const SAFE_MS = 2200;        // after a crash the plane blinks and can't crash again this long
+const LIVES = 5;             // how many crashes you get on one course
+// Coins for the hat shop: some for every 50 m section you get through (kept even if you crash later),
+// and a bonus at the finish plus one coin for every 5 bananas
+const SECTION_COINS = 2, FINISH_COINS = 5;
+const METER = 40;            // world units per meter
+
+// ---- The course: 200 meters, with a new setting every 50 meters ----
+const COURSE_M = 200, SECTION_M = 50;
+const FINISH = COURSE_M * METER, SECTION = SECTION_M * METER, SECTIONS = COURSE_M / SECTION_M;
+const BLEND = 150;           // the sky changes smoothly over this distance around each new setting
+
+// It starts wide and slow and gets a bit harder towards the finish. After the finish it opens up.
+const speedAt = x => 120 + Math.min(45, x / 170);
+const gapAt = x => x > FINISH ? Math.min(310, 205 + (x - FINISH) / 4) : Math.max(205, 295 - x / 88);
+
+// ---- The settings, the same as the themes in the maze game ----
+// sky: top and bottom colour, roof: the ceiling's colour, deco: things standing on the ground,
+// roofDeco: something hanging in the ceiling now and then.
+const THEMES = [
+  { name: '🌷 Trädgård', bg: '#fdf3e1', text: '#5a3b2e', wall: '#6cbf5a', wallTop: '#86d473',
+    sky: ['#8fd3ff', '#e6f6ff'], roof: '#5c688c', deco: ['🌳', '🌷', '🏡', '🐄', '🌻'], roofDeco: '⚡', sun: '☀️' },
+  { name: '🏖️ Strand', bg: '#e4f5fb', text: '#1f4a5c', wall: '#3f9cc4', wallTop: '#68bfe0',
+    sky: ['#4fc3f0', '#fff3d1'], roof: '#6d8fa8', deco: ['⛱️', '🐚', '🦀', '⛵', '🐠'], roofDeco: '💧', sun: '☀️' },
+  { name: '🍂 Höst', bg: '#fbeedd', text: '#6b3410', wall: '#cf7426', wallTop: '#eb9a45',
+    sky: ['#f2a65a', '#fbeedd'], roof: '#7a5a50', deco: ['🍁', '🍂', '🎃', '🍄', '🦔'], roofDeco: '🍂', sun: '🌤️' },
+  { name: '❄️ Vinter', bg: '#e8f1fb', text: '#2b4865', wall: '#8fbde3', wallTop: '#bcdcf5',
+    sky: ['#9cc4ec', '#f4f8ff'], roof: '#8a9bb5', deco: ['⛄', '🌲', '❄️', '🦌', '🏔️'], roofDeco: '❄️', sun: '🌥️' },
+  { name: '🍭 Godis', bg: '#fde6f2', text: '#7a1f4d', wall: '#e2609f', wallTop: '#f497c6',
+    sky: ['#f7a1cf', '#fff0f8'], roof: '#a65283', deco: ['🍭', '🍬', '🧁', '🍩', '🍫'], roofDeco: '🍬', sun: '🌈' },
+  { name: '🌴 Djungel', bg: '#e1f0d3', text: '#1f4a2b', wall: '#2e7a47', wallTop: '#43995e',
+    sky: ['#79c597', '#e1f0d3'], roof: '#35523f', deco: ['🌴', '🐒', '🦜', '🌺', '🐊'], roofDeco: '🍃', sun: '☀️' },
+  { name: '🚀 Rymden', bg: '#1d1b3d', text: '#f1ecff', wall: '#7b5bd6', wallTop: '#9c84ea',
+    sky: ['#0b0a20', '#2f2c5e'], roof: '#3a3570', deco: ['🛸', '👽', '🚀', '🌑', '🛰️'], roofDeco: '☄️', sun: '🪐', stars: true },
+  { name: '🌈 Regnbåge', bg: '#f6efff', text: '#5b2d82', wall: '#e05555', wallTop: '#f08080',
+    sky: ['#c3b0ff', '#fbf6ff'], roof: '#8d7bb8', deco: ['🦄', '🎈', '⭐', '🌈', '🦋'], roofDeco: '✨', sun: '☀️', rainbow: true },
+];
+
+// ---- Game state ----
+let state = 'ready';         // 'ready', 'flying', 'won' or 'over'
+let course;                  // the four settings for this flight, in random order
+let camX, plane, segs, segBase, drift, bananas, nextBananaX, score, lives, safeUntil, section, banner, earned;
+let holding = false;
+let scale = 1, viewW = 600;
+const particles = [];
+let best = 0;
+try { best = Number(localStorage.getItem('piggyFlyBest')) || 0; } catch (_) { /* storage blocked */ }
+
+const sectionAt = x => Math.max(0, Math.min(SECTIONS - 1, Math.floor(x / SECTION)));
+
+function reset() {
+  course = [...THEMES].sort(() => Math.random() - 0.5).slice(0, SECTIONS);
+  camX = 0;
+  segs = [];
+  segBase = 0;
+  drift = 0;
+  bananas = [];
+  nextBananaX = 500;
+  score = 0;
+  lives = LIVES;
+  earned = 0;
+  safeUntil = 0;
+  section = -1;
+  banner = null;
+  particles.length = 0;
+  fillTerrain();
+  plane = { y: H / 2, vy: 0 };
+  enterSection(0, performance.now());
+  updateHud();
+}
+
+// A new setting: the page colours change and its name is shown for a moment
+function enterSection(s, now) {
+  section = s;
+  const t = course[s];
+  const root = document.documentElement.style;
+  root.setProperty('--bg', t.bg);
+  root.setProperty('--text', t.text);
+  banner = { text: t.name, until: now + 2200 };
+  if (state === 'flying' && s > 0) {   // got through the section before this one
+    earned += Piggy.reward(SECTION_COINS);
+    banner.sub = `+${SECTION_COINS} 🪙`;
+    sound('coin');
+  }
+}
+
+// ---- The ground (below) and the ceiling (above) ----
+function addSeg() {
+  const x = segBase + segs.length * SEG;
+  const gap = gapAt(x);
+  const prev = segs[segs.length - 1];
+  let center = prev ? (prev.top + prev.bottom) / 2 : H / 2;
+  if (x > 300 && x < FINISH - 200) {   // flat at the start and at the finish, hills and valleys between
+    drift = Math.max(-6, Math.min(6, drift + (Math.random() - 0.5) * 4));
+    center += drift;
+  } else {
+    center += (H / 2 - center) * 0.05;
+  }
+  const lo = 25 + gap / 2, hi = H - 25 - gap / 2;
+  if (center < lo || center > hi) { center = Math.max(lo, Math.min(hi, center)); drift = -drift * 0.5; }
+  const theme = course[sectionAt(x)];
+  segs.push({
+    top: center - gap / 2, bottom: center + gap / 2,
+    deco: Math.random() < 0.2 ? theme.deco[Math.floor(Math.random() * theme.deco.length)] : null,
+    roofDeco: Math.random() < 0.05 ? theme.roofDeco : null,
+  });
+}
+
+function fillTerrain() {
+  while (segBase + (segs.length - 1) * SEG < camX + viewW + SEG * 2) addSeg();
+  while (segs.length > 2 && segBase + SEG < camX - SEG * 2) { segs.shift(); segBase += SEG; }
+}
+
+// Where the ceiling ends and the ground starts at world position x
+function terrainAt(x) {
+  const f = (x - segBase) / SEG;
+  const i = Math.max(0, Math.min(segs.length - 2, Math.floor(f)));
+  const t = Math.max(0, Math.min(1, f - i));
+  const a = segs[i], b = segs[i + 1];
+  return { top: a.top + (b.top - a.top) * t, bottom: a.bottom + (b.bottom - a.bottom) * t };
+}
+
+const planeX = () => camX + viewW * 0.28;
+
+// ---- Bananas (and now and then a heart) along the way ----
+function spawnBananas() {
+  while (nextBananaX < camX + viewW + 60 && nextBananaX < FINISH - 200) {
+    const count = Math.random() < 0.4 ? 1 : 3 + Math.floor(Math.random() * 3);
+    const heart = lives < LIVES && Math.random() < 0.12;
+    const t = terrainAt(nextBananaX);
+    const margin = 35;
+    const y0 = t.top + margin + Math.random() * (t.bottom - t.top - margin * 2);
+    for (let i = 0; i < count; i++) {
+      const x = nextBananaX + i * 34;
+      const ti = terrainAt(x);
+      const y = Math.max(ti.top + margin, Math.min(ti.bottom - margin, y0 + Math.sin(i * 0.9) * 25));
+      bananas.push({ x, y, kind: heart && i === 0 ? 'heart' : 'banana', wobble: Math.random() * 6 });
+    }
+    nextBananaX += count * 34 + 160 + Math.random() * 180;
+  }
+  bananas = bananas.filter(b => b.x > camX - 40);
+}
+
+// ---- One step of the game ----
+function update(dt, now) {
+  const finished = state === 'won';
+  camX += speedAt(camX) * dt;
+  fillTerrain();
+  spawnBananas();
+
+  const px = planeX();
+  if (finished) {
+    // After the finish piggy glides along by itself
+    const t = terrainAt(px);
+    plane.vy += ((t.top + t.bottom) / 2 - plane.y) * 3 * dt - plane.vy * 2 * dt;
+  } else {
+    plane.vy += (holding ? -LIFT + GRAVITY : GRAVITY) * dt;
+  }
+  plane.vy = Math.max(-MAX_VY, Math.min(MAX_VY, plane.vy));
+  plane.y += plane.vy * dt;
+
+  if (sectionAt(px) !== section) enterSection(sectionAt(px), now);
+  if (finished) return;
+
+  // Crash into the ground or the ceiling?
+  if (now > safeUntil) {
+    for (const x of [px - PLANE_HALF, px, px + PLANE_HALF]) {
+      const t = terrainAt(x);
+      if (plane.y - PLANE_R < t.top || plane.y + PLANE_R > t.bottom) { crash(plane.y - PLANE_R < t.top, now); break; }
+    }
+  } else {
+    // Blinking: the plane can't crash, but it stays inside the way
+    const t = terrainAt(px);
+    if (plane.y - PLANE_R < t.top) { plane.y = t.top + PLANE_R; plane.vy = Math.max(0, plane.vy); }
+    if (plane.y + PLANE_R > t.bottom) { plane.y = t.bottom - PLANE_R; plane.vy = Math.min(0, plane.vy); }
+  }
+  if (state !== 'flying') return;
+
+  // Pick up bananas and hearts
+  for (const b of bananas) {
+    if (b.got || Math.abs(b.x - px) > 28 || Math.abs(b.y - plane.y) > 26) continue;
+    b.got = true;
+    if (b.kind === 'heart') {
+      lives = Math.min(LIVES, lives + 1);
+      sound('heart');
+      burst(b.x, b.y, ['💖', '✨'], 8);
+    } else {
+      score++;
+      sound('eat');
+      burst(b.x, b.y, ['✨', '⭐', '💛'], 6);
+    }
+  }
+  bananas = bananas.filter(b => !b.got);
+
+  if (px >= FINISH) win(now);
+  updateHud();
+}
+
+function crash(intoCeiling, now) {
+  lives--;
+  sound('crash');
+  burst(planeX(), plane.y, intoCeiling ? ['⚡', '💥', '☁️'] : ['💥', '🌱', '⭐'], 12);
+  shakeUntil = now + 300;
+  updateHud();
+  if (lives <= 0) { gameOver(); return; }
+  // Back to the middle of the way, and safe for a moment
+  const t = terrainAt(planeX());
+  plane.y = (t.top + t.bottom) / 2;
+  plane.vy = 0;
+  safeUntil = now + SAFE_MS;
+}
+
+const bananaWord = n => `${n} ${n === 1 ? 'banan' : 'bananer'}`;
+
+function gameOver() {
+  state = 'over';
+  holding = false;
+  const meters = Math.floor(planeX() / METER);
+  document.getElementById('overText').textContent =
+    `Krasch! Grisen flög ${meters} av ${COURSE_M} meter och plockade ${bananaWord(score)}.`;
+  document.getElementById('earnedOver').textContent = earned ? `+${earned} 🪙` : '';
+  setTimeout(() => { sound('over'); document.getElementById('over').classList.add('show'); }, 700);
+}
+
+function win(now) {
+  state = 'won';
+  holding = false;
+  safeUntil = 0;
+  sound('win');
+  for (let i = 0; i < 40; i++) {
+    burst(camX + Math.random() * viewW, Math.random() * H, ['🎉', '🍌', '⭐', '💖', '🏁'], 1);
+  }
+  const record = score > best;
+  if (record) {
+    best = score;
+    try { localStorage.setItem('piggyFlyBest', String(best)); } catch (_) { /* storage blocked */ }
+  }
+  document.getElementById('wonText').textContent =
+    `Du klarade banan! Grisen flög hela vägen till målet och plockade ${bananaWord(score)}.`;
+  // The last section is done too, plus the finish bonus and coins for the bananas
+  earned += Piggy.reward(SECTION_COINS + FINISH_COINS + Math.floor(score / 5));
+  document.getElementById('earned').textContent = `+${earned} 🪙`;
+  document.getElementById('bestWon').textContent = record && score > 0 ? '🏆 Nytt rekord!' : `Rekord: ${best} 🍌`;
+  updateHud();
+  setTimeout(() => document.getElementById('won').classList.add('show'), 1800);
+}
+
+function start() {
+  if (state !== 'ready') reset();   // the first flight keeps the course shown behind the start card
+  state = 'flying';
+  document.querySelectorAll('.overlay').forEach(o => o.classList.remove('show'));
+  banner = { text: course[0].name, until: performance.now() + 2200 };
+  last = performance.now();
+}
+
+let hud = '';
+function updateHud() {
+  const meters = Math.min(COURSE_M, Math.floor(planeX() / METER));
+  const l = Math.max(0, lives);
+  const text = l + '|' + score + '|' + meters;
+  if (text === hud) return;
+  hud = text;
+  document.getElementById('lives').textContent = '❤️'.repeat(l) + '🤍'.repeat(LIVES - l);
+  document.getElementById('score').textContent = `🍌 ${score}`;
+  document.getElementById('meters').textContent = `${meters} / ${COURSE_M} m`;
+}
+
+// ---- Controls: hold to climb ----
+const UP_KEYS = [' ', 'ArrowUp', 'w', 'W'];
+addEventListener('keydown', e => {
+  const shown = document.querySelector('.overlay.show');
+  if (shown) {
+    if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); shown.querySelector('button').click(); }
+    return;
+  }
+  if (UP_KEYS.includes(e.key)) { e.preventDefault(); holding = true; }
+});
+addEventListener('keyup', e => { if (UP_KEYS.includes(e.key)) holding = false; });
+addEventListener('pointerdown', e => {
+  if (state !== 'flying' || e.target.closest('button, a')) return;
+  holding = true;
+});
+addEventListener('pointerup', () => { holding = false; });
+addEventListener('pointercancel', () => { holding = false; });
+addEventListener('blur', () => { holding = false; });
+
+document.getElementById('start').onclick = start;
+document.getElementById('again').onclick = start;
+document.getElementById('again2').onclick = start;
+
+// ---- Sounds (Web Audio, no files needed) ----
+let audio, muted = false;
+addEventListener('pointerdown', () => {
+  try { audio ??= new AudioContext(); audio.resume(); } catch (_) { /* no audio available */ }
+});
+function tone(freq, dur, type, delay, vol) {
+  audio ??= new AudioContext();
+  if (audio.state === 'suspended') audio.resume();
+  const t = audio.currentTime + delay;
+  const osc = audio.createOscillator();
+  const gain = audio.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.setValueAtTime(vol, t);
+  gain.gain.exponentialRampToValueAtTime(0.001, t + dur);
+  osc.connect(gain).connect(audio.destination);
+  osc.start(t);
+  osc.stop(t + dur);
+}
+function sound(name) {
+  if (muted) return;
+  try {
+    if (name === 'eat') { tone(660, 0.08, 'square', 0, 0.06); tone(990, 0.12, 'square', 0.06, 0.06); }
+    if (name === 'heart') [660, 880, 1320].forEach((f, i) => tone(f, 0.15, 'triangle', i * 0.08, 0.2));
+    if (name === 'crash') { tone(150, 0.3, 'sawtooth', 0, 0.12); tone(90, 0.4, 'square', 0.05, 0.1); }
+    if (name === 'over') [523, 440, 349, 262].forEach((f, i) => tone(f, 0.25, 'triangle', i * 0.15, 0.18));
+    if (name === 'coin') { tone(988, 0.08, 'square', 0, 0.06); tone(1319, 0.2, 'square', 0.08, 0.06); }
+    if (name === 'win') [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, 0.3, 'triangle', i * 0.12, 0.2));
+  } catch (_) { /* no audio available */ }
+}
+document.getElementById('mute').onclick = e => {
+  muted = !muted;
+  e.currentTarget.textContent = muted ? '🔇' : '🔊';
+  e.currentTarget.blur();
+};
+
+// ---- Piggy's hat: chosen and bought in the hat shop (piggy.js), shared by all the games ----
+let hat = Piggy.hat();
+Piggy.onHatChange(h => { hat = h; resize(); });
+Piggy.mount(document.getElementById('hats'));
+
+// ---- Sparkles ----
+function burst(x, y, chars, n) {
+  for (let i = 0; i < n; i++) {
+    const angle = Math.random() * Math.PI * 2;
+    const speed = 60 + Math.random() * 120;
+    particles.push({
+      x, y, vx: Math.cos(angle) * speed, vy: Math.sin(angle) * speed - 60,
+      life: 1, ch: chars[Math.floor(Math.random() * chars.length)],
+    });
+  }
+}
+
+// ---- Drawing ----
+function resize() {
+  const headerH = document.querySelector('header').offsetHeight;
+  const tipH = document.getElementById('tip').offsetHeight + 20;
+  const w = Math.min(window.innerWidth - 32, 1100);
+  const h = Math.max(220, Math.min(window.innerHeight - headerH - tipH - 16, w * 0.62));
+  const dpr = window.devicePixelRatio || 1;
+  canvas.width = w * dpr;
+  canvas.height = h * dpr;
+  canvas.style.width = w + 'px';
+  canvas.style.height = h + 'px';
+  scale = h / H;
+  viewW = w / scale;
+  ctx.setTransform(dpr * scale, 0, 0, dpr * scale, 0, 0);   // draw in world units
+  if (segs) fillTerrain();
+}
+addEventListener('resize', resize);
+
+function emoji(ch, x, y, size, angle = 0) {
+  ctx.save();
+  ctx.translate(x, y);
+  if (angle) ctx.rotate(angle);
+  ctx.fillStyle = '#000';
+  ctx.font = `${size}px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(ch, 0, 0);
+  ctx.restore();
+}
+
+const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
+const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
+const rgb = c => `rgb(${c.join(',')})`;
+
+// The sky of the setting at x, blending into the next one around each 50 meter mark
+function skyAt(x) {
+  const k = Math.round(x / SECTION);
+  let from = course[sectionAt(x)], to = from, t = 0;
+  if (k >= 1 && k < SECTIONS && Math.abs(x - k * SECTION) < BLEND) {
+    from = course[k - 1];
+    to = course[k];
+    t = (x - k * SECTION + BLEND) / (2 * BLEND);
+  }
+  return {
+    from, to, t,
+    top: mix(hex(from.sky[0]), hex(to.sky[0]), t),
+    low: mix(hex(from.sky[1]), hex(to.sky[1]), t),
+    stars: (from.stars ? 1 - t : 0) + (to.stars ? t : 0),
+  };
+}
+
+const STARS = Array.from({ length: 60 }, () => ({ x: Math.random(), y: Math.random() * 0.8, s: 1 + Math.random() * 1.5 }));
+const PUFFS = Array.from({ length: 7 }, () => ({ x: Math.random(), y: 0.2 + Math.random() * 0.5, s: 0.6 + Math.random() * 0.8 }));
+
+function drawPlane(x, y, angle, now, blink) {
+  if (blink && Math.floor(now / 120) % 2) return;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(angle);
+  // Tail fin
+  ctx.fillStyle = '#d94040';
+  ctx.beginPath();
+  ctx.moveTo(-30, -2); ctx.lineTo(-36, -22); ctx.lineTo(-25, -22); ctx.lineTo(-15, -4);
+  ctx.fill();
+  // Piggy in the cockpit, with its hat
+  emoji('🐷', 2, -13, 24);
+  if (hat) emoji(hat, 2, -27, 15, -0.15);
+  // Body
+  ctx.fillStyle = '#ff5c5c';
+  ctx.beginPath();
+  ctx.ellipse(0, 0, 32, 11, 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(-22, -2, 30, 4);
+  // Wing
+  ctx.fillStyle = '#c23a3a';
+  ctx.beginPath();
+  ctx.roundRect(-12, 3, 24, 8, 4);
+  ctx.fill();
+  // Nose and spinning propeller
+  ctx.fillStyle = '#ffd34d';
+  ctx.beginPath();
+  ctx.arc(31, 0, 5, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.fillStyle = 'rgba(80, 80, 80, 0.75)';
+  ctx.beginPath();
+  ctx.ellipse(36, 0, 2.5, 3 + 13 * Math.abs(Math.sin(now / 25)), 0, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.restore();
+}
+
+// The ground and ceiling of one setting, drawn only between `left` and `right`
+function drawSection(theme, left, right, now) {
+  const first = segBase, lastX = segBase + (segs.length - 1) * SEG;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(left, -50, right - left, H + 100);
+  ctx.clip();
+  let groundFill = theme.wall;
+  if (theme.rainbow) {
+    // Rainbow ground: colour stripes that slowly drift, like the rainbow walls in the maze
+    groundFill = ctx.createLinearGradient(first, 0, first + 700, 0);
+    for (let i = 0; i <= 6; i++) groundFill.addColorStop(i / 6, `hsl(${(i * 60 + now / 20) % 360}, 80%, 62%)`);
+  }
+  ctx.fillStyle = groundFill;
+  ctx.beginPath();
+  ctx.moveTo(first, H + 10);
+  segs.forEach((s, i) => ctx.lineTo(first + i * SEG, s.bottom));
+  ctx.lineTo(lastX, H + 10);
+  ctx.fill();
+  ctx.strokeStyle = theme.rainbow ? 'rgba(255, 255, 255, 0.7)' : theme.wallTop;
+  ctx.lineWidth = 5;
+  ctx.beginPath();
+  segs.forEach((s, i) => ctx.lineTo(first + i * SEG, s.bottom + 2));
+  ctx.stroke();
+  // The ceiling: puffy and dark
+  ctx.fillStyle = theme.roof;
+  ctx.beginPath();
+  ctx.moveTo(first, -10);
+  segs.forEach((s, i) => ctx.lineTo(first + i * SEG, s.top - 8));
+  ctx.lineTo(lastX, -10);
+  ctx.fill();
+  segs.forEach((s, i) => {
+    ctx.beginPath();
+    ctx.arc(first + i * SEG, s.top - 8 + (i % 2) * 3, 12 + (i % 3) * 2, 0, Math.PI * 2);
+    ctx.fill();
+  });
+  ctx.restore();
+}
+
+function drawFinish() {
+  const t = terrainAt(FINISH), sq = 10;
+  ctx.globalAlpha = 0.9;
+  for (let y = t.top - 12, row = 0; y < t.bottom + 12; y += sq, row++) {
+    for (let c = 0; c < 2; c++) {
+      ctx.fillStyle = (row + c) % 2 ? '#222' : '#fff';
+      ctx.fillRect(FINISH - sq + c * sq, y, sq, sq);
+    }
+  }
+  ctx.globalAlpha = 1;
+  emoji('🏁', FINISH + 6, t.top + 20, 30);
+  emoji('🏁', FINISH + 6, t.bottom - 20, 30);
+}
+
+// How far along the course piggy is, at the top of the screen
+function drawProgress() {
+  const x0 = viewW * 0.15, x1 = viewW * 0.85, y = 16, w = (x1 - x0) / SECTIONS;
+  ctx.fillStyle = 'rgba(255, 255, 255, 0.85)';
+  ctx.beginPath();
+  ctx.roundRect(x0 - 6, y - 9, x1 - x0 + 12, 18, 9);
+  ctx.fill();
+  course.forEach((t, i) => {
+    ctx.fillStyle = t.rainbow ? `hsl(${(Date.now() / 20) % 360}, 80%, 62%)` : t.wall;
+    ctx.fillRect(x0 + i * w + 1, y - 5, w - 2, 10);
+  });
+  emoji('🏁', x1 + 16, y, 18);
+  const p = Math.min(1, planeX() / FINISH);
+  emoji('🐷', x0 + (x1 - x0) * p, y, 20);
+}
+
+let shakeUntil = 0;
+let last = performance.now();
+function frame(now) {
+  const dt = Math.min(1 / 30, (now - last) / 1000);
+  last = now;
+  if (Piggy.isOpen()) holding = false;   // the hat shop pauses the flight
+  else if (state === 'flying' || state === 'won') update(dt, now);
+  else if (state === 'ready') plane.y = H / 2 + Math.sin(now / 400) * 10;   // hover, waiting for take-off
+
+  // Particles move in the world
+  for (let i = particles.length - 1; i >= 0; i--) {
+    const p = particles[i];
+    p.x += p.vx * dt; p.y += p.vy * dt; p.vy += 200 * dt; p.life -= dt * 1.1;
+    if (p.life <= 0) particles.splice(i, 1);
+  }
+  draw(now);
+  requestAnimationFrame(frame);
+}
+
+function draw(now) {
+  const sky = skyAt(planeX());
+  ctx.save();
+  if (now < shakeUntil) ctx.translate((Math.random() - 0.5) * 8, (Math.random() - 0.5) * 8);
+
+  // Sky, stars, sun (or planet) and far-away clouds
+  const g = ctx.createLinearGradient(0, 0, 0, H);
+  g.addColorStop(0, rgb(sky.top));
+  g.addColorStop(1, rgb(sky.low));
+  ctx.fillStyle = g;
+  ctx.fillRect(-10, -10, viewW + 20, H + 20);
+  if (sky.stars > 0) {
+    ctx.fillStyle = `rgba(255, 255, 230, ${sky.stars})`;
+    for (const s of STARS) ctx.fillRect(s.x * viewW, s.y * H, s.s, s.s);
+  }
+  ctx.globalAlpha = 1 - sky.t;
+  emoji(sky.from.sun, viewW * 0.82, H * 0.32, 44);
+  ctx.globalAlpha = sky.t;
+  emoji(sky.to.sun, viewW * 0.82, H * 0.32, 44);
+  ctx.globalAlpha = 0.35 * (1 - sky.stars);   // pale, so they look far away and not like something to crash into
+  for (const c of PUFFS) {
+    const x = ((c.x * (viewW + 200) - camX * 0.2 * c.s) % (viewW + 200) + viewW + 200) % (viewW + 200) - 100;
+    emoji('☁️', x, c.y * H, 34 * c.s);
+  }
+  ctx.globalAlpha = 1;
+
+  ctx.save();
+  ctx.translate(-camX, 0);
+  const first = segBase, lastX = segBase + (segs.length - 1) * SEG;
+
+  // Ground and ceiling, in the colours of each setting on screen
+  for (let s = sectionAt(first); s <= sectionAt(lastX); s++) {
+    const left = s === sectionAt(first) ? first - 50 : s * SECTION;
+    const right = s === sectionAt(lastX) ? lastX + 50 : (s + 1) * SECTION;
+    drawSection(course[s], left, right, now);
+  }
+  segs.forEach((s, i) => {
+    const x = first + i * SEG;
+    if (s.deco) emoji(s.deco, x, s.bottom - 9, 22);
+    if (s.roofDeco && Math.sin(now / 300 + i) > -0.3) emoji(s.roofDeco, x, s.top + 4, 18);
+  });
+  if (FINISH > first - 30 && FINISH < lastX + 30) drawFinish();
+
+  // Bananas and hearts
+  for (const b of bananas) {
+    const bob = Math.sin(now / 250 + b.wobble) * 4;
+    emoji(b.kind === 'heart' ? '❤️' : '🍌', b.x, b.y + bob, 26);
+  }
+
+  // The plane tilts up when climbing and down when sinking
+  if (state !== 'over' || Math.floor(now / 100) % 2) {
+    drawPlane(planeX(), plane.y, plane.vy / MAX_VY * 0.45, now, now < safeUntil);
+  }
+
+  for (const p of particles) {
+    ctx.globalAlpha = Math.max(0, p.life);
+    emoji(p.ch, p.x, p.y, 20);
+  }
+  ctx.globalAlpha = 1;
+  ctx.restore();
+
+  drawProgress();
+
+  // The name of a new setting, shown for a moment
+  if (banner && now < banner.until && state !== 'ready') {
+    const fade = Math.min(1, (banner.until - now) / 400);
+    ctx.save();
+    ctx.globalAlpha = fade;
+    ctx.font = `bold 40px "Comic Sans MS", "Chalkboard SE", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.lineWidth = 6;
+    ctx.strokeStyle = '#fff';
+    ctx.fillStyle = '#5a3b2e';
+    ctx.strokeText(banner.text, viewW / 2, H * 0.22);
+    ctx.fillText(banner.text, viewW / 2, H * 0.22);
+    if (banner.sub) {
+      ctx.font = `bold 30px "Comic Sans MS", "Chalkboard SE", sans-serif`;
+      ctx.strokeText(banner.sub, viewW / 2, H * 0.22 + 40);
+      ctx.fillText(banner.sub, viewW / 2, H * 0.22 + 40);
+    }
+    ctx.restore();
+  }
+  ctx.restore();
+}
+
+// Don't count the time the page was hidden
+document.addEventListener('visibilitychange', () => { holding = false; last = performance.now(); });
+
+document.getElementById('bestReady').textContent = best ? `Rekord: ${best} 🍌` : '';
+reset();
+resize();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
