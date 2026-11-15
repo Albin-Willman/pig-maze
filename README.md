@@ -39,7 +39,7 @@ Grisen flyger ett flygplan! Håll nere **mellanslag**, **pil upp** eller **fingr
 - Man har 5 liv ❤️. En krasch kostar ett liv, och sedan blinkar planet en stund och kan inte krocka.
 - Ibland flyger ett hjärta ❤️ förbi som ger tillbaka ett liv.
 - Det börjar brett och lugnt och blir lite svårare (snabbare och smalare) mot målet. En bana tar ungefär en minut.
-- Planets färg väljs på start- och slutskärmen (tio färger, bland annat en regnbåge 🌈) och sparas.
+- Planet byter färg i varje miljö: rött i trädgården, gult på stranden, lila på hösten, blått på vintern, vitt och rosa i godislandet, orange i djungeln, silver i rymden och regnbågsfärgat i regnbågen 🌈.
 - Rekordet (flest bananer på en klarad bana) sparas.
 
 ## 🪙 Mynt och hattar

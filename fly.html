@@ -73,15 +73,6 @@
     display: inline-block; font-size: 26px; padding: 10px 24px; margin: 4px; border-radius: 14px;
     background: #b9a89a; box-shadow: 0 3px 0 #8a7a6d; color: #fff; text-decoration: none;
   }
-  .colors { margin: 0 0 14px; }
-  .colors .label { font-size: 19px; opacity: 0.8; margin: 0; }
-  .planePreview { display: block; margin: 0 auto; width: 160px; height: 90px; }
-  .colors .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
-  .card button.color {
-    width: 36px; height: 36px; padding: 0; margin: 0; border-radius: 50%;
-    border: 3px solid #fff; box-shadow: 0 0 0 2px #0002;
-  }
-  .card button.color.on { box-shadow: 0 0 0 4px var(--ink); transform: scale(1.12); }
 </style>
 </head>
 <body>
@@ -105,7 +96,6 @@
       <p class="small">Håll nere <b>mellanslag</b>, <b>pil upp</b> eller <b>fingret</b> för att flyga uppåt.
         Släpp för att sjunka. Akta dig för marken och taket!</p>
       <p class="small" id="bestReady"></p>
-      <div class="colors"></div>
       <button id="start">Lyft! ✈️</button>
     </div>
   </div>
@@ -115,7 +105,6 @@
       <div class="big">💥🐷</div>
       <p id="overText"></p>
       <p id="earnedOver" style="font-size: 30px; margin: 0 0 16px;"></p>
-      <div class="colors"></div>
       <button id="again">Försök igen ✈️</button>
       <a class="btn" href="index.html">Alla spel 🏠</a>
     </div>
@@ -127,7 +116,6 @@
       <p id="wonText"></p>
       <p id="earned" style="font-size: 30px; margin: 0 0 16px;"></p>
       <p class="small" id="bestWon"></p>
-      <div class="colors"></div>
       <button id="again2">Flyg en ny bana ✈️</button>
       <a class="btn" href="index.html">Alla spel 🏠</a>
     </div>
@@ -168,21 +156,29 @@ const gapAt = x => x > FINISH ? Math.min(310, 205 + (x - FINISH) / 4) : Math.max
 // roofDeco: something hanging in the ceiling now and then.
 const THEMES = [
   { name: '🌷 Trädgård', bg: '#fdf3e1', text: '#5a3b2e', wall: '#6cbf5a', wallTop: '#86d473',
-    sky: ['#8fd3ff', '#e6f6ff'], roof: '#5c688c', deco: ['🌳', '🌷', '🏡', '🐄', '🌻'], roofDeco: '⚡', sun: '☀️' },
+    sky: ['#8fd3ff', '#e6f6ff'], roof: '#5c688c', deco: ['🌳', '🌷', '🏡', '🐄', '🌻'], roofDeco: '⚡',
+    plane: { body: '#ff5c5c', dark: '#c23a3a', fin: '#d94040' }, sun: '☀️' },
   { name: '🏖️ Strand', bg: '#e4f5fb', text: '#1f4a5c', wall: '#3f9cc4', wallTop: '#68bfe0',
-    sky: ['#4fc3f0', '#fff3d1'], roof: '#6d8fa8', deco: ['⛱️', '🐚', '🦀', '⛵', '🐠'], roofDeco: '💧', sun: '☀️' },
+    sky: ['#4fc3f0', '#fff3d1'], roof: '#6d8fa8', deco: ['⛱️', '🐚', '🦀', '⛵', '🐠'], roofDeco: '💧',
+    plane: { body: '#ffd84a', dark: '#e0a400', fin: '#ff8a3c', nose: '#ff8a3c' }, sun: '☀️' },
   { name: '🍂 Höst', bg: '#fbeedd', text: '#6b3410', wall: '#cf7426', wallTop: '#eb9a45',
-    sky: ['#f2a65a', '#fbeedd'], roof: '#7a5a50', deco: ['🍁', '🍂', '🎃', '🍄', '🦔'], roofDeco: '🍂', sun: '🌤️' },
+    sky: ['#f2a65a', '#fbeedd'], roof: '#7a5a50', deco: ['🍁', '🍂', '🎃', '🍄', '🦔'], roofDeco: '🍂',
+    plane: { body: '#8a4fd8', dark: '#5f2fa8', fin: '#7340c4' }, sun: '🌤️' },
   { name: '❄️ Vinter', bg: '#e8f1fb', text: '#2b4865', wall: '#8fbde3', wallTop: '#bcdcf5',
-    sky: ['#9cc4ec', '#f4f8ff'], roof: '#8a9bb5', deco: ['⛄', '🌲', '❄️', '🦌', '🏔️'], roofDeco: '❄️', sun: '🌥️' },
+    sky: ['#9cc4ec', '#f4f8ff'], roof: '#8a9bb5', deco: ['⛄', '🌲', '❄️', '🦌', '🏔️'], roofDeco: '❄️',
+    plane: { body: '#2f6fd8', dark: '#1d4ea3', fin: '#e04848', stripe: '#ffffff' }, sun: '🌥️' },
   { name: '🍭 Godis', bg: '#fde6f2', text: '#7a1f4d', wall: '#e2609f', wallTop: '#f497c6',
-    sky: ['#f7a1cf', '#fff0f8'], roof: '#a65283', deco: ['🍭', '🍬', '🧁', '🍩', '🍫'], roofDeco: '🍬', sun: '🌈' },
+    sky: ['#f7a1cf', '#fff0f8'], roof: '#a65283', deco: ['🍭', '🍬', '🧁', '🍩', '🍫'], roofDeco: '🍬',
+    plane: { body: '#ffffff', dark: '#ff6fb5', fin: '#ff6fb5', stripe: '#ff6fb5' }, sun: '🌈' },
   { name: '🌴 Djungel', bg: '#e1f0d3', text: '#1f4a2b', wall: '#2e7a47', wallTop: '#43995e',
-    sky: ['#79c597', '#e1f0d3'], roof: '#35523f', deco: ['🌴', '🐒', '🦜', '🌺', '🐊'], roofDeco: '🍃', sun: '☀️' },
+    sky: ['#79c597', '#e1f0d3'], roof: '#35523f', deco: ['🌴', '🐒', '🦜', '🌺', '🐊'], roofDeco: '🍃',
+    plane: { body: '#ff9a3c', dark: '#cc6a14', fin: '#e67e22', stripe: '#3d2a14' }, sun: '☀️' },
   { name: '🚀 Rymden', bg: '#1d1b3d', text: '#f1ecff', wall: '#7b5bd6', wallTop: '#9c84ea',
-    sky: ['#0b0a20', '#2f2c5e'], roof: '#3a3570', deco: ['🛸', '👽', '🚀', '🌑', '🛰️'], roofDeco: '☄️', sun: '🪐', stars: true },
+    sky: ['#0b0a20', '#2f2c5e'], roof: '#3a3570', deco: ['🛸', '👽', '🚀', '🌑', '🛰️'], roofDeco: '☄️',
+    plane: { body: '#e8e8f2', dark: '#9a9ab4', fin: '#ff5c5c', stripe: '#4f9dff' }, sun: '🪐', stars: true },
   { name: '🌈 Regnbåge', bg: '#f6efff', text: '#5b2d82', wall: '#e05555', wallTop: '#f08080',
-    sky: ['#c3b0ff', '#fbf6ff'], roof: '#8d7bb8', deco: ['🦄', '🎈', '⭐', '🌈', '🦋'], roofDeco: '✨', sun: '☀️', rainbow: true },
+    sky: ['#c3b0ff', '#fbf6ff'], roof: '#8d7bb8', deco: ['🦄', '🎈', '⭐', '🌈', '🦋'], roofDeco: '✨',
+    plane: { rainbow: true }, sun: '☀️', rainbow: true },
 ];
 
 // ---- Game state ----
@@ -419,7 +415,7 @@ const UP_KEYS = [' ', 'ArrowUp', 'w', 'W'];
 addEventListener('keydown', e => {
   const shown = document.querySelector('.overlay.show');
   if (shown) {
-    if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); shown.querySelector('button:not(.color)').click(); }
+    if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); shown.querySelector('button').click(); }
     return;
   }
   if (UP_KEYS.includes(e.key)) { e.preventDefault(); holding = true; }
@@ -478,45 +474,6 @@ let hat = Piggy.hat();
 Piggy.onHatChange(h => { hat = h; resize(); });
 Piggy.mount(document.getElementById('hats'));
 
-// ---- The plane's colour: picked on the start, crash and finish cards, saved in the browser ----
-const PLANE_COLORS = [
-  { name: 'Röd', body: '#ff5c5c', dark: '#c23a3a', fin: '#d94040' },
-  { name: 'Orange', body: '#ff9a3c', dark: '#d06a14', fin: '#e67e22' },
-  { name: 'Gul', body: '#ffd84a', dark: '#d9a800', fin: '#f0bd1a', nose: '#ff8a3c' },
-  { name: 'Grön', body: '#5cc96b', dark: '#33924a', fin: '#43ad57' },
-  { name: 'Blå', body: '#4f9dff', dark: '#2a6cc6', fin: '#3a84e6' },
-  { name: 'Lila', body: '#a77bff', dark: '#7448cc', fin: '#8c5fe8' },
-  { name: 'Rosa', body: '#ff8fc8', dark: '#dd5a9c', fin: '#f070b2' },
-  { name: 'Vit', body: '#f6f6f6', dark: '#c4c4c4', fin: '#dadada', stripe: '#ff5c5c' },
-  { name: 'Svart', body: '#3d3d46', dark: '#1f1f25', fin: '#2c2c33', stripe: '#ffd34d' },
-  { name: 'Regnbåge', rainbow: true },
-];
-let planeColor = PLANE_COLORS[0];
-try { planeColor = PLANE_COLORS.find(c => c.name === localStorage.getItem('piggyPlaneColor')) || planeColor; } catch (_) { /* storage blocked */ }
-
-function showColors() {
-  document.querySelectorAll('.color').forEach(b => b.classList.toggle('on', b.dataset.name === planeColor.name));
-}
-document.querySelectorAll('.colors').forEach(box => {
-  box.innerHTML = '<p class="label">Planets färg</p><canvas class="planePreview"></canvas><div class="row"></div>';
-  for (const pc of PLANE_COLORS) {
-    const b = document.createElement('button');
-    b.className = 'color';
-    b.dataset.name = pc.name;
-    b.title = pc.name;
-    b.style.background = pc.rainbow ? 'conic-gradient(red, orange, yellow, lime, deepskyblue, violet, red)' : pc.body;
-    b.onclick = () => {
-      planeColor = pc;
-      try { localStorage.setItem('piggyPlaneColor', pc.name); } catch (_) { /* storage blocked */ }
-      showColors();
-      b.blur();
-      sound('eat');
-    };
-    box.querySelector('.row').appendChild(b);
-  }
-});
-showColors();
-
 // ---- Sparkles ----
 function burst(x, y, chars, n) {
   for (let i = 0; i < n; i++) {
@@ -563,6 +520,18 @@ const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
 const mix = (a, b, t) => a.map((v, i) => Math.round(v + (b[i] - v) * t));
 const rgb = c => `rgb(${c.join(',')})`;
 
+// The plane's colours at x: every setting paints the plane in its own colours,
+// blending into the next ones just like the sky
+function planeColorAt(x) {
+  const { from, to, t } = skyAt(x);
+  const near = t < 0.5 ? from.plane : to.plane;
+  if (from.plane.rainbow || to.plane.rainbow) return near;   // the rainbow can't be blended, it just switches
+  const part = (pl, key) => hex(pl[key] || { stripe: '#ffffff', nose: '#ffd34d' }[key]);
+  const out = {};
+  for (const key of ['body', 'dark', 'fin', 'stripe', 'nose']) out[key] = rgb(mix(part(from.plane, key), part(to.plane, key), t));
+  return out;
+}
+
 // The sky of the setting at x, blending into the next one around each 50 meter mark
 function skyAt(x) {
   const k = Math.round(x / SECTION);
@@ -585,7 +554,7 @@ const PUFFS = Array.from({ length: 7 }, () => ({ x: Math.random(), y: 0.2 + Math
 
 function drawPlane(x, y, angle, now, blink, c = ctx) {
   if (blink && Math.floor(now / 120) % 2) return;
-  const pc = planeColor;
+  const pc = planeColorAt(planeX());
   const hue = now / 8 % 360;   // the rainbow plane slowly changes colour
   c.save();
   c.translate(x, y);
@@ -624,19 +593,6 @@ function drawPlane(x, y, angle, now, blink, c = ctx) {
   c.ellipse(36, 0, 2.5, 3 + 13 * Math.abs(Math.sin(now / 25)), 0, 0, Math.PI * 2);
   c.fill();
   c.restore();
-}
-
-// The little plane on the start and end cards, so you can see the colour you picked
-function drawPreview(canvas, now) {
-  const dpr = window.devicePixelRatio || 1;
-  const w = canvas.clientWidth, h = canvas.clientHeight;
-  if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
-  const c = canvas.getContext('2d');
-  c.setTransform(dpr, 0, 0, dpr, 0, 0);
-  c.clearRect(0, 0, w, h);
-  c.translate(w / 2 - 4, h * 0.66 + Math.sin(now / 400) * 3);
-  c.scale(1.5, 1.5);
-  drawPlane(0, 0, Math.sin(now / 600) * 0.08, now, false, c);
 }
 
 // The ground and ceiling of one setting, drawn only between `left` and `right`
@@ -724,8 +680,6 @@ function frame(now) {
     if (p.life <= 0) particles.splice(i, 1);
   }
   draw(now);
-  const preview = document.querySelector('.overlay.show .planePreview');
-  if (preview) drawPreview(preview, now);
   requestAnimationFrame(frame);
 }
 
