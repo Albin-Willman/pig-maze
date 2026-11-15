@@ -273,32 +273,109 @@ const GOALS = [
     spawn: [['A', 'sheep'], ['A', 'clover'], ['B', 'hedgehog'], ['B', 'apple'], ['C', 'ribbon']] },
 ];
 
-// ---- The map. Each letter is one tile. ----
+// ---- The maps. Each letter is one tile. ----
 //  T tree   ~ water   # fence   , flowers   . grass   P piggy starts here
-//  f fishing spot in the pond   L what blocks the way   G the locked gate
+//  f fishing spot in the pond   L what blocks the way   G the locked gate (in a fence)
 //  H Grandma's house   a Grandma
-const MAP = [
-  'TTTTTTTTTTTTTTTTTTTT',
-  'T......,..T.......,T',
-  'T..~~~....T.,......T',
-  'T.~~~~f...T........T',
-  'T..~~~....L........T',
-  'T.,.......T......,.T',
-  'T....P....T........T',
-  'T......,..T#####G##T',
-  'T.........T.,......T',
-  'T.........T........T',
-  'T.........T...H.a..T',
-  'T..,......T......,.T',
-  'TTTTTTTTTTTTTTTTTTTT',
+// Every map has three fields: A where piggy starts, B behind what blocks the way, and C behind the
+// gate where Grandma lives. The fields are worked out from the map, so a new map just needs that
+// shape (and the pond in field A or B). Each round picks a map, maybe mirrors it, and scatters new flowers.
+const MAPS = [
+  [ // The farm: Grandma's yard is fenced in at the bottom right
+    'TTTTTTTTTTTTTTTTTTTT',
+    'T......,..T.......,T',
+    'T..~~~....T.,......T',
+    'T.~~~~f...T........T',
+    'T..~~~....L........T',
+    'T.,.......T......,.T',
+    'T....P....T........T',
+    'T......,..T#####G##T',
+    'T.........T.,......T',
+    'T.........T........T',
+    'T.........T...H.a..T',
+    'T..,......T......,.T',
+    'TTTTTTTTTTTTTTTTTTTT',
+  ],
+  [ // The river: one bridge over it, and Grandma lives up in the corner
+    'TTTTTTTTTTTTTTTTTTTT',
+    'T.,.....T.....,....T',
+    'T..H.a..T..........T',
+    'T.....,.T.........,T',
+    'T###G###T.......,..T',
+    'T,.................T',
+    'T~~~~~~~~~~~L~~~~~~T',
+    'T..................T',
+    'T...~~~.......,....T',
+    'T..~~~f............T',
+    'T...~~....P........T',
+    'T.,.............,..T',
+    'TTTTTTTTTTTTTTTTTTTT',
+  ],
+  [ // The forest: a row of trees with one way through
+    'TTTTTTTTTTTTTTTTTTTT',
+    'T....,.......~~~...T',
+    'T..P..........~f...T',
+    'T.......,....~~~...T',
+    'T.,..............,.T',
+    'TTTTTLTTTTTTTTTTTTTT',
+    'T..................T',
+    'T.,......,.........T',
+    'T.......T###G######T',
+    'T.......T.....,....T',
+    'T.,.....T..H.a.....T',
+    'T.......T.......,..T',
+    'TTTTTTTTTTTTTTTTTTTT',
+  ],
+  [ // The orchard: piggy starts at the bottom, Grandma is up in the corner
+    'TTTTTTTTTTTTTTTTTTTT',
+    'T.......,..T.,.....T',
+    'T..........T..H.a..T',
+    'T....,.....T.......T',
+    'T..........T##G####T',
+    'T.,................T',
+    'T..........,.......T',
+    'TTTTTTTTTLTTTTTTTTTT',
+    'T.....,............T',
+    'T..~~~.....T....,..T',
+    'T.~~f..P...........T',
+    'T..~~.....,........T',
+    'TTTTTTTTTTTTTTTTTTTT',
+  ],
 ];
-const fieldOf = (x, y) => x < 10 ? 'A' : y < 7 ? 'B' : 'C';
+
+// A map for this round: maybe mirrored left-right and/or upside down, with new flowers
+function makeMap(base) {
+  let m = base.map(row => [...row]);
+  if (Math.random() < 0.5) m = m.map(row => row.reverse());
+  if (Math.random() < 0.5) m.reverse();
+  for (const row of m) row.forEach((ch, x) => { if (ch === ',') row[x] = '.'; });
+  for (let n = 0; n < 12;) {
+    const y = 1 + Math.floor(Math.random() * (m.length - 2)), x = 1 + Math.floor(Math.random() * (m[0].length - 2));
+    if (m[y][x] === '.') { m[y][x] = ','; n++; }
+  }
+  return m;
+}
+
+// Which field (A, B or C) every grass tile belongs to: A is what piggy reaches from the start,
+// B is what opens up when the blocker is gone, and C is behind the gate
+function findFields(m, px, py) {
+  const fields = m.map(row => row.map(() => null));
+  const grass = (x, y, through) => '.,P'.includes(m[y][x]) || through.includes(m[y][x]);
+  [['A', ''], ['B', 'L'], ['C', 'LG']].forEach(([name, through]) => {
+    for (const key of flood(px, py, (x, y) => grass(x, y, through))) {
+      const [x, y] = key.split(',').map(Number);
+      if (!fields[y][x]) fields[y][x] = name;
+    }
+  });
+  return fields;
+}
 
 // ---- Game state ----
+let map, fields, mapIndex = -1;
 let ground, entities, pig, drawPos, bag, chosen, steps, won, hint, recipes;
 let parts = {};   // the blocker, key holder and goal picked for this round
 let tile = 32;
-const cols = MAP[0].length, rows = MAP.length;
+const cols = MAPS[0][0].length, rows = MAPS[0].length;
 const particles = [];
 const DIRS = [[1, 0], [-1, 0], [0, 1], [0, -1]];
 const sayEl = document.getElementById('say');
@@ -310,7 +387,10 @@ function newGame() {
   parts = { blocker: fresh(BLOCKERS, parts.blocker), keys: fresh(KEYHOLDERS, parts.keys), goal: fresh(GOALS, parts.goal) };
   const all = [parts.blocker, parts.keys, parts.goal];
   recipes = all.flatMap(p => p.recipes).map(([a, b, makes, text]) => ({ a, b, makes, text, left: 1 }));
-  for (let tries = 0; tries < 100; tries++) {
+  // A new map too (not the same as last time). Tries again until the round can be finished.
+  mapIndex = (mapIndex + 1 + Math.floor(Math.random() * (MAPS.length - 1))) % MAPS.length;
+  for (let tries = 0; tries < 200; tries++) {
+    if (tries % 20 === 0) map = makeMap(MAPS[tries < 100 ? mapIndex : tries / 20 % MAPS.length]);
     placeEverything(all.flatMap(p => p.spawn));
     if (canBeFinished()) break;
   }
@@ -332,11 +412,14 @@ function newGame() {
 }
 
 function placeEverything(spawn) {
-  ground = MAP.map(row => [...row].map(ch => ch === 'f' ? '~' : '~T#,'.includes(ch) ? ch : '.'));
+  // Ground: the blocker stands on a little bridge when it's in water
+  const wet = (x, y) => '~f'.includes(map[y]?.[x]);
+  ground = map.map((row, y) => row.map((ch, x) => ch === 'f' ? '~' : '~T#,'.includes(ch) ? ch
+    : ch === 'L' && (wet(x - 1, y) || wet(x + 1, y) || wet(x, y - 1) || wet(x, y + 1)) ? '=' : '.'));
   entities = [];
   let pond;
   const wobble = () => Math.random() * Math.PI * 2;
-  MAP.forEach((row, y) => [...row].forEach((ch, x) => {
+  map.forEach((row, y) => row.forEach((ch, x) => {
     const at = { x, y, wobble: wobble() };
     if (ch === 'P') pig = { x, y, face: 1 };
     if (ch === 'f') pond = { x, y };
@@ -347,6 +430,7 @@ function placeEverything(spawn) {
     if (ch === 'a') entities.push({ ...at, icon: '👵', short: '👵', wants: parts.goal.item, win: true,
       ask: parts.goal.ask, say: parts.goal.say });
   }));
+  fields = findFields(map, pig.x, pig.y);
   // Animals first, then the things to pick up
   const order = [...spawn.filter(([, what]) => WHO[what]), ...spawn.filter(([, what]) => !WHO[what])];
   for (const [field, what] of order) {
@@ -359,7 +443,7 @@ function placeEverything(spawn) {
     const free = [];
     for (let y = 1; y < rows - 1; y++) {
       for (let x = 1; x < cols - 1; x++) {
-        if (fieldOf(x, y) !== field || !open(x, y) || (x === pig.x && y === pig.y)) continue;
+        if (fields[y][x] !== field || !open(x, y) || (x === pig.x && y === pig.y)) continue;
         if (who && !roomAround(x, y)) continue;
         free.push([x, y]);
       }
@@ -370,7 +454,7 @@ function placeEverything(spawn) {
   }
 }
 
-const open = (x, y) => '.,'.includes(ground[y][x]) && !entityAt(x, y);
+const open = (x, y) => '.,='.includes(ground[y][x]) && !entityAt(x, y);
 // Animals stand with free grass all around them, so they never block a path
 const roomAround = (x, y) => [-1, 0, 1].every(dx => [-1, 0, 1].every(dy => open(x + dx, y + dy)));
 
@@ -395,7 +479,7 @@ function canBeFinished() {
   const blocked = (x, y) => ents.some(e => e.x === x && e.y === y && !e.item);
   for (let progress = true; progress;) {
     progress = false;
-    const seen = flood(pig.x, pig.y, (x, y) => '.,'.includes(ground[y][x]) && !blocked(x, y));
+    const seen = flood(pig.x, pig.y, (x, y) => '.,='.includes(ground[y][x]) && !blocked(x, y));
     for (const e of [...ents]) {
       const reach = e.item ? seen.has(e.x + ',' + e.y)
                            : DIRS.some(([dx, dy]) => seen.has((e.x + dx) + ',' + (e.y + dy)));
@@ -427,7 +511,7 @@ function canBeFinished() {
 
 const entityAt = (x, y) => entities.find(e => e.x === x && e.y === y);
 const solid = e => e && !e.item;
-const walkable = (x, y) => '.,'.includes(ground[y][x]) && !solid(entityAt(x, y));
+const walkable = (x, y) => '.,='.includes(ground[y][x]) && !solid(entityAt(x, y));
 const paused = () => document.querySelector('.overlay.show') || won || Piggy.isOpen();
 
 function say(text) {
@@ -751,6 +835,19 @@ function drawFence(x, y) {
   ctx.fillRect(px + tile * 0.76, py + tile * 0.15, tile * 0.14, tile * 0.7);
 }
 
+// Wooden planks across the water
+function drawBridge(x, y) {
+  const px = x * tile, py = y * tile;
+  ctx.fillStyle = '#5bb8e8';
+  ctx.fillRect(px, py, tile, tile);
+  const across = '~'.includes(ground[y][x - 1] || '') || '~'.includes(ground[y][x + 1] || '');
+  for (let i = 0; i < 4; i++) {
+    ctx.fillStyle = i % 2 ? '#b07a45' : '#c48a52';
+    if (across) ctx.fillRect(px + 1, py + i * tile / 4 + 1, tile - 2, tile / 4 - 2);
+    else ctx.fillRect(px + i * tile / 4 + 1, py + 1, tile / 4 - 2, tile - 2);
+  }
+}
+
 // A speech bubble above a character showing what it wants
 function bubble(x, y, icon, pop) {
   const cx = (x + 0.5) * tile, cy = (y - 0.35) * tile;
@@ -798,6 +895,7 @@ function draw(now) {
       if (g === 'T') emoji((x * 7 + y * 3) % 4 ? '🌳' : '🌲', px + tile / 2, py + tile / 2, tile * 0.95);
       if (g === ',') emoji((x + y) % 2 ? '🌼' : '🌷', px + tile / 2, py + tile / 2, tile * 0.42);
       if (g === '#') drawFence(x, y);
+      if (g === '=') drawBridge(x, y);
     }
   }
 
@@ -805,7 +903,7 @@ function draw(now) {
   for (const e of entities) {
     const cx = (e.x + 0.5) * tile, cy = (e.y + 0.5) * tile;
     const bob = Math.sin(now / 300 + e.wobble) * tile * 0.06;
-    if (e.dirt) {
+    if (e.dirt && ground[e.y][e.x] !== '=') {
       ctx.fillStyle = '#c9a26b';   // a dirt path under the blocker, so it looks like a way through
       ctx.fillRect(e.x * tile, e.y * tile, tile, tile);
     }
