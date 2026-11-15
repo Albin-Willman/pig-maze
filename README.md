@@ -22,13 +22,13 @@ Hjälp grisen att hitta alla bananer i en mörk labyrint och ta dig sedan ut gen
 
 Hjälp mormor 👵! Gå runt på gården, plocka upp saker och tryck på två saker i väskan 🎒 för att sätta ihop dem (🪵 + 🪨 = 🪓). Ge sakerna till djuren och hindren som vill ha dem. En pratbubbla visar vad de vill ha när man kommer nära. 💡 föreslår vad man kan göra härnäst.
 
-Varje omgång blandas ihop av tre delar, och sakerna och djuren hamnar på nya ställen varje gång:
+Varje omgång spelas på en av fyra kartor (gården, floden med en bro, skogen och fruktträdgården), som ibland är spegelvända och får nya blommor. Sakerna och djuren hamnar på nya ställen varje gång, och omgången blandas ihop av tre delar:
 
 - **Vad mormor vill ha:** en tårta 🎂, pannkakor 🥞 eller en present 🎁 (en halsduk 🧣)
 - **Vad som står i vägen:** ett omkullfallet träd 🌲 (yxa 🪓), ett spindelnät 🕸️ (kvast 🧹) eller en björn 🐻 (honung 🍯 från bina)
 - **Vem som har nyckeln till grinden:** katten 🐱 (fisk 🐟), apan 🐒 (banan 🍌 från palmen) eller musen 🐭 (ost 🧀 från geten)
 
-Innan en omgång börjar spelar spelet igenom den i huvudet för att se till att den går att klara. Allt finns som vanlig data högst upp i koden (`ITEMS`, `WHO`, `BLOCKERS`, `KEYHOLDERS`, `GOALS`, `MAP`), så det är lätt att lägga till fler delar.
+Innan en omgång börjar spelar spelet igenom den i huvudet för att se till att den går att klara. Allt finns som vanlig data högst upp i koden (`ITEMS`, `WHO`, `BLOCKERS`, `KEYHOLDERS`, `GOALS`, `MAPS`), så det är lätt att lägga till fler delar och kartor.
 
 ## ✈️ Flygturen (`fly.html`)
 
@@ -39,6 +39,7 @@ Grisen flyger ett flygplan! Håll nere **mellanslag**, **pil upp** eller **fingr
 - Man har 5 liv ❤️. En krasch kostar ett liv, och sedan blinkar planet en stund och kan inte krocka.
 - Ibland flyger ett hjärta ❤️ förbi som ger tillbaka ett liv.
 - Det börjar brett och lugnt och blir lite svårare (snabbare och smalare) mot målet. En bana tar ungefär en minut.
+- Planets färg väljs på start- och slutskärmen (tio färger, bland annat en regnbåge 🌈) och sparas.
 - Rekordet (flest bananer på en klarad bana) sparas.
 
 ## 🪙 Mynt och hattar
@@ -49,7 +50,7 @@ När man klarar ett spel får man mynt:
 - **Gårdsäventyret:** 15 mynt
 - **Flygturen:** 2 mynt för varje avklarad 50-metersdel (även om man kraschar senare), plus 5 mynt extra för att nå målet och ett mynt för var femte banan
 
-Mynten används i **Hattbutiken**, som man öppnar med knappen "Hattar" på startsidan eller i spelen. Där finns de vanliga hattarna gratis och 19 roligare saker att köpa (allt kan vara en hatt: 🍌 🍄 🐸 🍕 🦖 🚀 🪐 …). Mynt, köpta hattar och vald hatt sparas i webbläsaren och delas av alla spelen. Koden finns i `piggy.js`.
+Mynten används i **Hattbutiken**, som man öppnar med knappen "Hattar" på startsidan eller i spelen. Där finns de vanliga hattarna gratis och 19 roligare saker att köpa (allt kan vara en hatt: 🍌 🍄 🐸 🍕 🦖 🚀 🪐 …). Tryck på en hatt man inte har för att prova den på grisen först, och tryck igen (eller på köpknappen) för att köpa den. Mynt, köpta hattar och vald hatt sparas i webbläsaren och delas av alla spelen. Koden finns i `piggy.js`.
 
 ## Lägga till ett spel
 

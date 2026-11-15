@@ -73,6 +73,15 @@
     display: inline-block; font-size: 26px; padding: 10px 24px; margin: 4px; border-radius: 14px;
     background: #b9a89a; box-shadow: 0 3px 0 #8a7a6d; color: #fff; text-decoration: none;
   }
+  .colors { margin: 0 0 14px; }
+  .colors .label { font-size: 19px; opacity: 0.8; margin: 0; }
+  .planePreview { display: block; margin: 0 auto; width: 160px; height: 90px; }
+  .colors .row { display: flex; flex-wrap: wrap; justify-content: center; gap: 6px; }
+  .card button.color {
+    width: 36px; height: 36px; padding: 0; margin: 0; border-radius: 50%;
+    border: 3px solid #fff; box-shadow: 0 0 0 2px #0002;
+  }
+  .card button.color.on { box-shadow: 0 0 0 4px var(--ink); transform: scale(1.12); }
 </style>
 </head>
 <body>
@@ -96,6 +105,7 @@
       <p class="small">Håll nere <b>mellanslag</b>, <b>pil upp</b> eller <b>fingret</b> för att flyga uppåt.
         Släpp för att sjunka. Akta dig för marken och taket!</p>
       <p class="small" id="bestReady"></p>
+      <div class="colors"></div>
       <button id="start">Lyft! ✈️</button>
     </div>
   </div>
@@ -105,6 +115,7 @@
       <div class="big">💥🐷</div>
       <p id="overText"></p>
       <p id="earnedOver" style="font-size: 30px; margin: 0 0 16px;"></p>
+      <div class="colors"></div>
       <button id="again">Försök igen ✈️</button>
       <a class="btn" href="index.html">Alla spel 🏠</a>
     </div>
@@ -116,6 +127,7 @@
       <p id="wonText"></p>
       <p id="earned" style="font-size: 30px; margin: 0 0 16px;"></p>
       <p class="small" id="bestWon"></p>
+      <div class="colors"></div>
       <button id="again2">Flyg en ny bana ✈️</button>
       <a class="btn" href="index.html">Alla spel 🏠</a>
     </div>
@@ -407,7 +419,7 @@ const UP_KEYS = [' ', 'ArrowUp', 'w', 'W'];
 addEventListener('keydown', e => {
   const shown = document.querySelector('.overlay.show');
   if (shown) {
-    if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); shown.querySelector('button').click(); }
+    if ((e.key === 'Enter' || e.key === ' ') && !e.repeat) { e.preventDefault(); shown.querySelector('button:not(.color)').click(); }
     return;
   }
   if (UP_KEYS.includes(e.key)) { e.preventDefault(); holding = true; }
@@ -466,6 +478,45 @@ let hat = Piggy.hat();
 Piggy.onHatChange(h => { hat = h; resize(); });
 Piggy.mount(document.getElementById('hats'));
 
+// ---- The plane's colour: picked on the start, crash and finish cards, saved in the browser ----
+const PLANE_COLORS = [
+  { name: 'Röd', body: '#ff5c5c', dark: '#c23a3a', fin: '#d94040' },
+  { name: 'Orange', body: '#ff9a3c', dark: '#d06a14', fin: '#e67e22' },
+  { name: 'Gul', body: '#ffd84a', dark: '#d9a800', fin: '#f0bd1a', nose: '#ff8a3c' },
+  { name: 'Grön', body: '#5cc96b', dark: '#33924a', fin: '#43ad57' },
+  { name: 'Blå', body: '#4f9dff', dark: '#2a6cc6', fin: '#3a84e6' },
+  { name: 'Lila', body: '#a77bff', dark: '#7448cc', fin: '#8c5fe8' },
+  { name: 'Rosa', body: '#ff8fc8', dark: '#dd5a9c', fin: '#f070b2' },
+  { name: 'Vit', body: '#f6f6f6', dark: '#c4c4c4', fin: '#dadada', stripe: '#ff5c5c' },
+  { name: 'Svart', body: '#3d3d46', dark: '#1f1f25', fin: '#2c2c33', stripe: '#ffd34d' },
+  { name: 'Regnbåge', rainbow: true },
+];
+let planeColor = PLANE_COLORS[0];
+try { planeColor = PLANE_COLORS.find(c => c.name === localStorage.getItem('piggyPlaneColor')) || planeColor; } catch (_) { /* storage blocked */ }
+
+function showColors() {
+  document.querySelectorAll('.color').forEach(b => b.classList.toggle('on', b.dataset.name === planeColor.name));
+}
+document.querySelectorAll('.colors').forEach(box => {
+  box.innerHTML = '<p class="label">Planets färg</p><canvas class="planePreview"></canvas><div class="row"></div>';
+  for (const pc of PLANE_COLORS) {
+    const b = document.createElement('button');
+    b.className = 'color';
+    b.dataset.name = pc.name;
+    b.title = pc.name;
+    b.style.background = pc.rainbow ? 'conic-gradient(red, orange, yellow, lime, deepskyblue, violet, red)' : pc.body;
+    b.onclick = () => {
+      planeColor = pc;
+      try { localStorage.setItem('piggyPlaneColor', pc.name); } catch (_) { /* storage blocked */ }
+      showColors();
+      b.blur();
+      sound('eat');
+    };
+    box.querySelector('.row').appendChild(b);
+  }
+});
+showColors();
+
 // ---- Sparkles ----
 function burst(x, y, chars, n) {
   for (let i = 0; i < n; i++) {
@@ -496,16 +547,16 @@ function resize() {
 }
 addEventListener('resize', resize);
 
-function emoji(ch, x, y, size, angle = 0) {
-  ctx.save();
-  ctx.translate(x, y);
-  if (angle) ctx.rotate(angle);
-  ctx.fillStyle = '#000';
-  ctx.font = `${size}px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
-  ctx.textAlign = 'center';
-  ctx.textBaseline = 'middle';
-  ctx.fillText(ch, 0, 0);
-  ctx.restore();
+function emoji(ch, x, y, size, angle = 0, c = ctx) {
+  c.save();
+  c.translate(x, y);
+  if (angle) c.rotate(angle);
+  c.fillStyle = '#000';
+  c.font = `${size}px "Noto Color Emoji", "Apple Color Emoji", "Segoe UI Emoji", sans-serif`;
+  c.textAlign = 'center';
+  c.textBaseline = 'middle';
+  c.fillText(ch, 0, 0);
+  c.restore();
 }
 
 const hex = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16));
@@ -532,41 +583,60 @@ function skyAt(x) {
 const STARS = Array.from({ length: 60 }, () => ({ x: Math.random(), y: Math.random() * 0.8, s: 1 + Math.random() * 1.5 }));
 const PUFFS = Array.from({ length: 7 }, () => ({ x: Math.random(), y: 0.2 + Math.random() * 0.5, s: 0.6 + Math.random() * 0.8 }));
 
-function drawPlane(x, y, angle, now, blink) {
+function drawPlane(x, y, angle, now, blink, c = ctx) {
   if (blink && Math.floor(now / 120) % 2) return;
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(angle);
+  const pc = planeColor;
+  const hue = now / 8 % 360;   // the rainbow plane slowly changes colour
+  c.save();
+  c.translate(x, y);
+  c.rotate(angle);
   // Tail fin
-  ctx.fillStyle = '#d94040';
-  ctx.beginPath();
-  ctx.moveTo(-30, -2); ctx.lineTo(-36, -22); ctx.lineTo(-25, -22); ctx.lineTo(-15, -4);
-  ctx.fill();
+  c.fillStyle = pc.rainbow ? `hsl(${hue}, 80%, 55%)` : pc.fin;
+  c.beginPath();
+  c.moveTo(-30, -2); c.lineTo(-36, -22); c.lineTo(-25, -22); c.lineTo(-15, -4);
+  c.fill();
   // Piggy in the cockpit, with its hat
-  emoji('🐷', 2, -13, 24);
-  if (hat) emoji(hat, 2, -27, 15, -0.15);
+  emoji('🐷', 2, -13, 24, 0, c);
+  if (hat) emoji(hat, 2, -27, 15, -0.15, c);
   // Body
-  ctx.fillStyle = '#ff5c5c';
-  ctx.beginPath();
-  ctx.ellipse(0, 0, 32, 11, 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.fillRect(-22, -2, 30, 4);
+  if (pc.rainbow) {
+    const g = c.createLinearGradient(-32, 0, 32, 0);
+    for (let i = 0; i <= 5; i++) g.addColorStop(i / 5, `hsl(${(hue + i * 60) % 360}, 85%, 62%)`);
+    c.fillStyle = g;
+  } else c.fillStyle = pc.body;
+  c.beginPath();
+  c.ellipse(0, 0, 32, 11, 0, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = pc.stripe || '#fff';
+  c.fillRect(-22, -2, 30, 4);
   // Wing
-  ctx.fillStyle = '#c23a3a';
-  ctx.beginPath();
-  ctx.roundRect(-12, 3, 24, 8, 4);
-  ctx.fill();
+  c.fillStyle = pc.rainbow ? `hsl(${(hue + 180) % 360}, 70%, 50%)` : pc.dark;
+  c.beginPath();
+  c.roundRect(-12, 3, 24, 8, 4);
+  c.fill();
   // Nose and spinning propeller
-  ctx.fillStyle = '#ffd34d';
-  ctx.beginPath();
-  ctx.arc(31, 0, 5, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(80, 80, 80, 0.75)';
-  ctx.beginPath();
-  ctx.ellipse(36, 0, 2.5, 3 + 13 * Math.abs(Math.sin(now / 25)), 0, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.restore();
+  c.fillStyle = pc.nose || '#ffd34d';
+  c.beginPath();
+  c.arc(31, 0, 5, 0, Math.PI * 2);
+  c.fill();
+  c.fillStyle = 'rgba(80, 80, 80, 0.75)';
+  c.beginPath();
+  c.ellipse(36, 0, 2.5, 3 + 13 * Math.abs(Math.sin(now / 25)), 0, 0, Math.PI * 2);
+  c.fill();
+  c.restore();
+}
+
+// The little plane on the start and end cards, so you can see the colour you picked
+function drawPreview(canvas, now) {
+  const dpr = window.devicePixelRatio || 1;
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if (canvas.width !== Math.round(w * dpr)) { canvas.width = Math.round(w * dpr); canvas.height = Math.round(h * dpr); }
+  const c = canvas.getContext('2d');
+  c.setTransform(dpr, 0, 0, dpr, 0, 0);
+  c.clearRect(0, 0, w, h);
+  c.translate(w / 2 - 4, h * 0.66 + Math.sin(now / 400) * 3);
+  c.scale(1.5, 1.5);
+  drawPlane(0, 0, Math.sin(now / 600) * 0.08, now, false, c);
 }
 
 // The ground and ceiling of one setting, drawn only between `left` and `right`
@@ -654,6 +724,8 @@ function frame(now) {
     if (p.life <= 0) particles.splice(i, 1);
   }
   draw(now);
+  const preview = document.querySelector('.overlay.show .planePreview');
+  if (preview) drawPreview(preview, now);
   requestAnimationFrame(frame);
 }
 
