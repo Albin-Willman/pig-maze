@@ -86,8 +86,19 @@ const Piggy = (() => {
     @keyframes pg-pop { 0% { transform: scale(0.5); } 60% { transform: scale(1.2); } 100% { transform: scale(1); } }
     .pg-hat.pg-shake { animation: pg-shake 0.4s; }
     @keyframes pg-shake { 20%, 60% { transform: translateX(-6px); } 40%, 80% { transform: translateX(6px); } }
-    .pg-msg { min-height: 1.4em; margin: 12px 0 6px; font-size: 19px; }
-    .pg-done { font: inherit; font-size: 24px; border: none; border-radius: 14px; padding: 8px 24px; cursor: pointer;
+    .pg-top { position: sticky; top: -20px; z-index: 1; background: #fff; margin: 0 -8px; padding: 0 8px 4px; }
+    .pg-preview { position: relative; display: inline-block; font-size: 72px; line-height: 1; margin: 22px 0 6px; }
+    .pg-phat { position: absolute; left: 50%; top: -0.32em; font-size: 0.5em; transform: translateX(-50%) rotate(-12deg); }
+    .pg-phat.pg-new { animation: pg-hatpop 0.4s; }
+    @keyframes pg-hatpop { 0% { transform: translateX(-50%) translateY(-30px) rotate(-12deg); opacity: 0; } }
+    .pg-hat.pg-trying { border-color: #ffc35a; border-style: dashed; }
+    .pg-hat.pg-trying .pg-icon { filter: none; opacity: 1; }
+    .pg-buy { font: inherit; font-size: 22px; border: none; border-radius: 14px; padding: 8px 20px; cursor: pointer;
+      background: #ffc35a; color: #5a3b2e; box-shadow: 0 3px 0 #c98a1e; margin: 0 6px 14px; }
+    .pg-buy.pg-poor { background: #e6ded5; box-shadow: 0 3px 0 #0002; }
+    .pg-buy.pg-shake { animation: pg-shake 0.4s; }
+    .pg-msg { min-height: 1.4em; margin: 4px 0 10px; font-size: 19px; }
+    .pg-done { font: inherit; font-size: 24px; margin-top: 16px; border: none; border-radius: 14px; padding: 8px 24px; cursor: pointer;
       background: #ff8fb1; color: #fff; box-shadow: 0 3px 0 #c4577b; }
   `;
   const style = document.createElement('style');
@@ -111,6 +122,7 @@ const Piggy = (() => {
 
   // ---- The shop ----
   let shop = null;
+  let trying = null;   // a hat that isn't bought yet but that the pig is trying on in the shop
   function open() {
     if (shop) return;
     shop = document.createElement('div');
@@ -119,62 +131,101 @@ const Piggy = (() => {
       <div class="pg-card" role="dialog" aria-label="Hattbutiken">
         <h2>🎩 Hattbutiken</h2>
         <div class="pg-coins"></div>
+        <div class="pg-top">
+          <div class="pg-preview"><span class="pg-phat"></span>🐷</div>
+          <p class="pg-msg">Tryck på en hatt för att prova den! Klara spel för att tjäna mynt 🪙</p>
+          <button class="pg-buy" hidden></button>
+        </div>
         <div class="pg-grid"></div>
-        <p class="pg-msg">Klara spel för att tjäna mynt 🪙</p>
         <button class="pg-done">Klar ✔️</button>
       </div>`;
     shop.querySelector('.pg-done').onclick = close;
+    shop.querySelector('.pg-buy').onclick = () => buy(trying);
     shop.addEventListener('click', e => { if (e.target === shop) close(); });   // tap outside the card
     document.body.appendChild(shop);
     renderShop();
-    shop.querySelector('.pg-done').focus();
+    shop.querySelector('.pg-done').focus({ preventScroll: true });
   }
 
   function close() {
     if (!shop) return;
     shop.remove();
     shop = null;
+    trying = null;   // a hat you only tried on comes off again
   }
 
   function say(text) { shop.querySelector('.pg-msg').textContent = text; }
 
   function renderShop(popHat) {
     shop.querySelector('.pg-coins').textContent = `Du har 🪙 ${coins} mynt`;
+    const worn = trying ? trying.hat : hat;
+    const phat = shop.querySelector('.pg-phat');
+    phat.textContent = worn || '';
+    phat.classList.remove('pg-new');
+    if (popHat !== undefined) { void phat.offsetWidth; phat.classList.add('pg-new'); }
+    const buyBtn = shop.querySelector('.pg-buy');
+    buyBtn.hidden = !trying;
+    if (trying) {
+      buyBtn.textContent = `Köp ${trying.hat} för 🪙 ${trying.price}`;
+      buyBtn.classList.toggle('pg-poor', coins < trying.price);
+    }
     const grid = shop.querySelector('.pg-grid');
     grid.innerHTML = '';
     for (const h of HATS) {
       const b = document.createElement('button');
       const have = owns(h);
       b.className = 'pg-hat';
-      if (h.hat === hat) b.classList.add('pg-chosen');
+      if (h.hat === hat && !trying) b.classList.add('pg-chosen');
+      if (h === trying) b.classList.add('pg-trying');
       if (!have) b.classList.add('pg-locked');
       if (!have && coins >= h.price) b.classList.add('pg-afford');
       if (h.hat === popHat) b.classList.add('pg-new');
-      const tag = h.hat === hat ? '✔️ På' : have ? 'Välj' : `🪙 ${h.price}`;
+      const tag = h === trying ? '👀 Provar' : h.hat === hat && !trying ? '✔️ På' : have ? 'Välj' : `🪙 ${h.price}`;
       b.innerHTML = `<span class="pg-icon">${h.icon || h.hat}</span><span class="pg-name">${h.name}</span><span class="pg-tag">${tag}</span>`;
-      b.onclick = () => choose(h, b);
+      b.onclick = () => choose(h);
       grid.appendChild(b);
     }
   }
 
-  function choose(h, el) {
+  // Tapping a hat you own puts it on. Tapping one you don't own lets the pig try it on first;
+  // tapping it again (or the buy button) buys it.
+  function choose(h) {
     if (!owns(h)) {
-      if (coins < h.price) {
-        el.classList.remove('pg-shake');
-        void el.offsetWidth;   // restart the shake
-        el.classList.add('pg-shake');
-        say(`${h.hat} kostar ${h.price} mynt. Du behöver ${h.price - coins} till!`);
-        return;
-      }
-      coins -= h.price;
-      bought.push(h.hat);
-      say(`Du köpte ${h.name.toLowerCase()} ${h.hat}! 🎉`);
-    } else {
-      say(h.hat ? `Grisen har på sig ${h.name.toLowerCase()} ${h.hat}` : 'Ingen hatt');
+      if (trying === h) { buy(h); return; }
+      trying = h;
+      const left = h.price - coins;
+      say(left > 0
+        ? `Grisen provar ${h.name.toLowerCase()} ${h.hat}. Den kostar ${h.price} mynt, du behöver ${left} till.`
+        : `Grisen provar ${h.name.toLowerCase()} ${h.hat}. Vill du köpa den för ${h.price} mynt?`);
+      renderShop(h.hat);
+      return;
     }
+    trying = null;
+    say(h.hat ? `Grisen har på sig ${h.name.toLowerCase()} ${h.hat}` : 'Ingen hatt');
+    wear(h, h.hat);
+  }
+
+  function buy(h) {
+    if (!h) return;
+    if (coins < h.price) {
+      const btn = shop.querySelector('.pg-buy');
+      btn.classList.remove('pg-shake');
+      void btn.offsetWidth;   // restart the shake
+      btn.classList.add('pg-shake');
+      say(`${h.hat} kostar ${h.price} mynt. Du behöver ${h.price - coins} till!`);
+      return;
+    }
+    coins -= h.price;
+    bought.push(h.hat);
+    trying = null;
+    say(`Du köpte ${h.name.toLowerCase()} ${h.hat}! 🎉`);
+    wear(h, h.hat);
+  }
+
+  function wear(h, popHat) {
     hat = h.hat;
     save();
-    renderShop(h.hat);
+    renderShop(popHat);
     refreshButtons();
     listeners.forEach(cb => cb(hat));
   }
